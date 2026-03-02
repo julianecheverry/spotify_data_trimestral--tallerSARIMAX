@@ -1,0 +1,56 @@
+---
+title: "Modelo_SARIMAX_Spotify"
+author: "Julian Echeverry - MINE 009"
+date: "2026-03-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introducción
+
+-   ¿con qu´e variable est´an trabajando?
+
+-   c´omo son sus datos
+
+-   fuente de los datos
+
+# Descripción de la serie original
+
+-   Gráfico
+
+-   Hay tendencia?
+
+-   Hay estacionalidad?
+
+-   Cómo está la varianza? (heteroscedasticidad)
+
+# Modelo SARIMA
+
+## Transformaciones previas
+
+## identificación del modelo
+
+## Estimación de parámetros
+
+## Verificación supuestos sobre residuales
+
+## Modelos SARIMA seleccionados
+
+## Pruebas sobre pronósticos
+
+## Resumen de resultados
+
+Resultados:
+
+-   \$%&
+
+Problemas encontrados:
+
+-   $%&$\$%&
+
+¿por qu´e el modelo final es el adecuado?
+
+# Modelo SARIMAX
