@@ -17,13 +17,57 @@ knitr::opts_chunk$set(echo = TRUE)
 
 -   fuente de los datos
 
+```{r importacion datos}
+
+# active users Spotify Latam 2016-2025 - quarterly data
+
+library(readxl)
+
+usuarios_original <- read_excel("statistic_id813870_spotifys-maus-in-latin-america-2016-2025.xlsx", 
+    sheet = "plaintextdata_maus_latam")
+
+```
+
+-   Construir el objeto de tipo serie de tiempo, con el 80% de los registros de la serie original
+
+```{r serie_original}
+library(TSA)
+
+# 1. Calculamos el punto de corte (80% de los datos) como un número entero
+punto_corte <- floor(nrow(usuarios_original) * 0.8)
+# 31 trimestres
+
+# 2. Creamos la serie de tiempo usando el rango
+serie_original = ts(usuarios_original[1:punto_corte, 2], start = c(2016, 1), frequency = 4)
+```
+
 # Descripción de la serie original
 
 -   Gráfico
 
--   Hay tendencia?
+```{r plot1}
 
--   Hay estacionalidad?
+plot( serie_original,col="6", ann=FALSE)
+points(y=serie_original,x=time(serie_original),pch=as.vector(season(serie_original)),col="4")
+title(main="Serie de Número de usuarios Spotify en Latinoamérica", col.main="blue", font.main=2)
+title(xlab="Trimestres", col.lab=rgb(1,0.4,1))
+title(ylab="Número usuarios", col.lab=rgb(1,0.4,1))
+
+```
+
+**Primeros correlogramas**
+
+```{r correlogramas1}
+
+par(mfrow = c(1, 2))
+acf( serie_original,lag.max =10, main = "Autocorrelación (ACF)")
+pacf( serie_original,lag.max =10, main = "Autocorrelación Parcial (PACF)")
+
+```
+
+-   Hay tendencia? -\> SÍ
+
+-   Hay estacionalidad? -\> NO se evidencia gráficamente
 
 -   Cómo está la varianza? (heteroscedasticidad)
 
@@ -31,11 +75,185 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Transformaciones previas
 
+### Diferencias ordinarias y estacionales
+
+1.  Criterio de Victor Guerrero - mínima desviación estándar
+
+```{r criterio_vguerrero}
+
+s00=sd(serie_original)
+s10=sd(diff(serie_original,lag=1,differences=1))#(1-B) X_{t}
+s01=sd(diff(serie_original,lag=4,differences=1))#(1-B^4) X_{t}
+
+dif1usuarios<-diff(serie_original,lag=1,differences=1)##(1-B) X_{t}
+s11=sd(diff(dif1usuarios,lag=4,differences=1))#(1-B^4)(1-B) X_{t}
+s21=sd(diff(dif1usuarios,lag=4,differences=2))#(1-B^4)^2(1-B) X_{t}
+s20=sd(diff(serie_original,lag=1,differences=2))#(1-B)^2 X_{t}
+
+# AJUSTAR LOS PRINTS DE LOS VALORES S##
+s00
+s10
+s01
+s11
+s21 
+s20
+
+```
+
+2.  Criterio de decaimiento de la FAC
+
+```{r plot2}
+# Serie con la diferenciación escogida
+dusuarios<-diff(Tasa_desempleo,lag=1,differences=1)
+
+plot(dusuarios,ylab='Serie_Usuarios_diferenciada',xlab='Trimestre',type='o')
+x11()
+
+acf(dusuarios, lag.max=10)
+
+```
+
+3.  Pruebas estadísticas de raíz unitaria para diferencias ordinarias (ADF y PP)
+
+```{r ADF_PP}
+
+library(tseries)
+
+#Pruebas aplicadas a la serie original
+adf.test(serie_original)
+pp.test(serie_original)
+
+#Pruebas aplicadas a la serie diferenciada
+adf.test(dusuarios)
+pp.test(dusuarios)
+```
+
 ## identificación del modelo
+
+Correlogramas de la serie diferenciada
+
+```{r correlogramas2}
+
+serie_diferenciada <- "$%&"
+
+par(mfrow = c(1, 2))
+acf( serie_diferenciada,lag.max =10, main = "Autocorrelación (ACF)")
+pacf( serie_diferenciada,lag.max =10, main = "Autocorrelación Parcial (PACF)")
+```
 
 ## Estimación de parámetros
 
+Modelo 1
+
+```{r modelo1}
+modelo1=arima(serie_original,order=c(0,1,1),
+              seasonal=list(order=c(1,1,0),period=12))
+
+modelo1
+
+
+confint(modelo1)
+
+```
+
+Modelo 2
+
+```{r modelo2}
+modelo2=arima(serie_original,order=c(0,1,1),
+              seasonal=list(order=c(1,1,0),period=12))
+
+modelo2
+
+
+confint(modelo2)
+```
+
+Modelo 3
+
+```{r modelo3}
+modelo3=arima(serie_original,order=c(0,1,1),
+              seasonal=list(order=c(1,1,0),period=12))
+
+modelo3
+
+
+confint(modelo3)
+```
+
+Autoarima
+
+```{r autoarima}
+
+library(forecast)
+
+modelo_autoarima = auto.arima(serie_original)
+
+modelo_autoarima
+```
+
 ## Verificación supuestos sobre residuales
+
+### Media = 0
+
+```{r}
+
+modelo <- "#$%"
+
+plot(rstandard(modelo),ylab='Standardized residuals',type='b',main=expression(Residuals~~from~~the~~ARIMA(list(1,1,0))%*%(list(0,1,1))[12]~~Model))
+abline(h=0)
+```
+
+```{r}
+#Para ver si tienen media cero creamos un intervalo de confianza bajo la hipotesis nula
+#haga una prueba t para la media
+t.test(modelo$residuals)
+```
+
+### Varianza Constante
+
+```{r}
+a=sd(rstandard(modelo))
+#Para ver si teiene varianza cte, observe la grafica
+x11()
+plot(modelo$residuals, ylim=c(-3,3))
+abline(h=-3*a) #Simula una desviación de 3 desviaciones -> valores extremos
+abline(h=+3*a)
+```
+
+### No autocorrelación temporal
+
+```{r}
+
+# Criterio gráfico
+opcion = par(mfrow=c(2,1))
+acf(modelo$residuals,lag.max=10)
+pacf(modelo$residuals,lag.max=10)
+
+# Prueba de Ljung-Box
+Box.test(residuals(modelo),lag=10,type="Ljung" )
+Box.test(residuals(modelo),lag=13,type="Ljung" )
+Box.test(residuals(modelo),lag=25,type="Ljung" )
+
+# Gráficos de la prueba Ljung-Box
+
+tsdiag(modelo, gof.lag=24)
+```
+
+### Residuos estándar como ruido blanco
+
+```{r}
+qqnorm(rstandard(modelo))
+qqline(rstandard(modelo))
+
+```
+
+```{r}
+shapiro.test(rstandard(modelo))
+```
+
+```{r}
+hist(rstandard(modelo))
+```
 
 ## Modelos SARIMA seleccionados
 
