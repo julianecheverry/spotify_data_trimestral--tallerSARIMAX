@@ -15,11 +15,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Introducción
 
--   ¿con qu´e variable est´an trabajando?
+-   ¿con qué variable están trabajando?
 
     -   Número de usuarios de spotify. Incluye categorías premium y fremium
 
--   c´omo son sus datos
+-   cómo son sus datos
 
     -   De frecuencia trimestral, para latinoamérica
 
@@ -178,6 +178,32 @@ adf.test(diff(dif1usuarios,lag=4,differences=1))
 pp.test(diff(dif1usuarios,lag=4,differences=1))
 ```
 
+**Resultados:**
+
+1\. Pruebas aplicadas a la serie original:
+
+\- ❌ADF: El p-valor (0.79) no rechaza la hipótesis nula, por lo tanto la serie no es estacionaria.
+
+\- ❌Philiips-Perron: El p-valor (0.64) no rechaza la hipótesis nula, por lo tanto la serie no es estacionaria.
+
+2\. Pruebas aplicadas a la serie con 1 diferencia ordinaria:
+
+\- ❌ADF: El p-valor (0.50) no rechaza la hipótesis nula, por lo tanto la serie no es estacionaria.
+
+\- ✅Philiips-Perron: El p-valor (\<0.01) rechaza la hipótesis nula, por lo tanto la serie es estacionaria.
+
+3\. Pruebas aplicadas a la serie con 2 diferencias ordinarias:
+
+\- ❌ADF: El p-valor (0.07) no rechaza la hipótesis nula, por lo tanto la serie no es estacionaria.
+
+\- ✅Philiips-Perron: El p-valor (\<0.01) rechaza la hipótesis nula, por lo tanto la serie es estacionaria.
+
+4\. Pruebas aplicadas a la serie con 1 diferencia ordinaria y 1 estacional:
+
+\- ❌ADF: El p-valor (0.45) no rechaza la hipótesis nula, por lo tanto la serie no es estacionaria.
+
+\- ✅Philiips-Perron: El p-valor (\<0.01) rechaza la hipótesis nula, por lo tanto la serie es estacionaria.
+
 ### Serie logaritmo - Diferencias ordinarias y estacionales
 
 ```{r serielog}
@@ -263,6 +289,32 @@ cat(print("\n\nPruebas aplicadas a la serie con 1 diferencia ordinaria y 1 estac
 adf.test(diff(dif1logusuarios,lag=4,differences=1))
 pp.test(diff(dif1logusuarios,lag=4,differences=1))
 ```
+
+**Resultados:**
+
+1\. Pruebas aplicadas a la serie transformada con logaritmo natural:
+
+\- ❌ADF: El p-valor (0.91) no rechaza la hipótesis nula, por lo tanto la serie no es estacionaria.
+
+\- ❌Philiips-Perron: El p-valor (0.91) no rechaza la hipótesis nula, por lo tanto la serie no es estacionaria.
+
+2\. Pruebas aplicadas a la serie con 1 diferencia ordinaria:
+
+\- ❌ADF: El p-valor (0.52) no rechaza la hipótesis nula, por lo tanto la serie no es estacionaria.
+
+\- ✅Philiips-Perron: El p-valor (\<0.01) rechaza la hipótesis nula, por lo tanto la serie es estacionaria.
+
+3\. Pruebas aplicadas a la serie con 2 diferencias ordinarias:
+
+\- ❌ADF: El p-valor (0.055) no rechaza la hipótesis nula, por lo tanto la serie no es estacionaria.
+
+\- ✅Philiips-Perron: El p-valor (\<0.01) rechaza la hipótesis nula, por lo tanto la serie es estacionaria.
+
+4\. Pruebas aplicadas a la serie con 1 diferencia ordinaria y 1 estacional:
+
+\- ❌ADF: El p-valor (0.42) no rechaza la hipótesis nula, por lo tanto la serie no es estacionaria.
+
+\- ✅Philiips-Perron: El p-valor (\<0.01) rechaza la hipótesis nula, por lo tanto la serie es estacionaria.
 
 ### Serie boxcox - Diferencias ordinarias y estacionales
 
@@ -352,6 +404,32 @@ pp.test(diff(dif1boxcoxusuarios,lag=4,differences=1))
 
 ```
 
+**Resultados:**
+
+1\. Pruebas aplicadas a la serie transformada con algoritmo boxcox (potencia = 0.33):
+
+\- ❌ADF: El p-valor (0.82) no rechaza la hipótesis nula, por lo tanto la serie no es estacionaria.
+
+\- ❌Philiips-Perron: El p-valor (0.50) no rechaza la hipótesis nula, por lo tanto la serie no es estacionaria.
+
+2\. Pruebas aplicadas a la serie con 1 diferencia ordinaria:
+
+\- ❌ADF: El p-valor (0.50) no rechaza la hipótesis nula, por lo tanto la serie no es estacionaria.
+
+\- ✅Philiips-Perron: El p-valor (\<0.01) rechaza la hipótesis nula, por lo tanto la serie es estacionaria.
+
+3\. Pruebas aplicadas a la serie con 2 diferencias ordinarias:
+
+\- ❌ADF: El p-valor (0.066) no rechaza la hipótesis nula, por lo tanto la serie no es estacionaria.
+
+\- ✅Philiips-Perron: El p-valor (\<0.01) rechaza la hipótesis nula, por lo tanto la serie es estacionaria.
+
+4\. Pruebas aplicadas a la serie con 1 diferencia ordinaria y 1 estacional:
+
+\- ❌ADF: El p-valor (0.4421) no rechaza la hipótesis nula, por lo tanto la serie no es estacionaria.
+
+\- ✅Philiips-Perron: El p-valor (\<0.01) rechaza la hipótesis nula, por lo tanto la serie es estacionaria.
+
 ## identificación del modelo
 
 Correlogramas de la serie diferenciada
@@ -364,6 +442,8 @@ acf( serie_diferenciada1,lag.max =12, main = "Autocorrelación (ACF)\n1 Diferenc
 pacf( serie_diferenciada1,lag.max =12, main = "Autocorrelación Parcial (PACF)\n1 Diferencia Ordinaria")
 ```
 
+-   La alternativa de una diferencia ordinaria aplicada a la serie transformada con logaritmo natural es la que menor desviación estándar genera, sin embargo, en este escenario no habría ningún valor significativo de autocorrelación para ningún orden de rezago, según se observa en los correlogramas (general y parcial).
+
 ```{r correlogramas2}
 
 serie_diferenciada2 <- diff(serie_log,lag=1,differences=2)
@@ -373,6 +453,12 @@ acf( serie_diferenciada2,lag.max =12, main = "Autocorrelación (ACF)\n2 Diferenc
 pacf( serie_diferenciada2,lag.max =12, main = "Autocorrelación Parcial (PACF)\n2 Diferencias Ordinarias")
 ```
 
+-   La alternativa de dos diferencias ordinarias aplicadas a la serie transformada con logaritmo natural no es la que menor desviación estándar genera, sin embargo, en este escenario sí se encuentran valores de autocorrelación significativos según se observa en los correlogramas (general y parcial).
+
+-   Por esta razón, se trabajará con dos diferencias ordinarias en los modelos propuestos ($d = 2$ ).
+
+### **Modelos propuestos**
+
 A partir de los gráficos de ACF y PACF, se proponen los siguientes modelos a partir de la serie transformada con el logaritmo natural:
 
 -   Modelo 1: $SARIMA(0,2,1)(0,0,0)_4$
@@ -381,9 +467,13 @@ A partir de los gráficos de ACF y PACF, se proponen los siguientes modelos a pa
 
 -   Modelo 3: $SARIMA(0,2,1)(0,1,1)_4$
 
+-   Modelo autoarima
+
 ## Estimación de parámetros
 
-Modelo 1
+Modelo 1:
+
+-   ✅:El intervalo de confianza para el coeficiente MA1 no incluye el valor cero, por lo que se concluye que el coeficiente `ma1=-0.8695` es estadísticamente significativo
 
 ```{r modelo1}
 modelo1=arima(serie_log,order=c(0,2,1),
@@ -396,7 +486,11 @@ confint(modelo1)
 
 ```
 
-Modelo 2
+Modelo 2:
+
+-   ❌El intervalo de confianza para el coeficiente AR1 sí incluye el valor cero, por lo que se concluye que el coeficiente `ar1=-0.3019` no es estadísticamente significativo.
+
+-   ✅El intervalo de confianza para el coeficiente MA1 no incluye el valor cero, por lo que se concluye que el coeficiente `ma1=-0.8048` es estadísticamente significativo.
 
 ```{r modelo2}
 modelo2=arima(serie_log,order=c(1,2,1),
@@ -408,7 +502,14 @@ modelo2
 confint(modelo2)
 ```
 
-Modelo 3
+Modelo 3:
+
+-   ✅El intervalo de confianza para el coeficiente MA1 no incluye el valor cero, por lo que se concluye que el coeficiente \`ma1=-0.986\` es estadísticamente significativo.
+
+```{=html}
+<!-- -->
+```
+-   ✅El intervalo de confianza para el coeficiente SMA1 no incluye el valor cero, por lo que se concluye que el coeficiente \`sma1=-0.8832\` es estadísticamente significativo.
 
 ```{r modelo3}
 modelo3=arima(serie_log,order=c(0,2,1),
@@ -420,16 +521,37 @@ modelo3
 confint(modelo3)
 ```
 
-Autoarima
+Modelo Autoarima:
+
+-   ✅El intervalo de confianza para el coeficiente MA1 no incluye el valor cero, por lo que se concluye que el coeficiente \`ma1=-0.9008\` es estadísticamente significativo.
+
+-   ❌El intervalo de confianza para el coeficiente SMA1 sí incluye el valor cero, por lo que se concluye que el coeficiente \`sma1=0.3336\` no es estadísticamente significativo.
 
 ```{r autoarima}
 
 library(forecast)
 
-modelo_autoarima = auto.arima(serie_original)
+modelo_autoarima = auto.arima(serie_log)
 
 modelo_autoarima
+
+confint(modelo_autoarima)
 ```
+
+A continuación se muestra un cuadro resumen con los valores de los criterios de información de cada modelo:
+
+| Modelo                                    | Log-Likelihood | AIC    | BIC       |
+|---------------------|-----------------|-----------------|-----------------|
+| Modelo 1: $SARIMA(0,2,1)(0,0,0)_4$        | 48.71801       | -95.44 | -90.70143 |
+| Modelo 2: $SARIMA(1,2,1)(0,0,0)_4$        | 49.89493       | -95.79 | -89.68798 |
+| Modelo 3: $SARIMA(0,2,1)(0,1,1)_4$        | 35.12435       | -66.25 | -60.59207 |
+| Modelo Autoarima: $ARIMA(0,2,1)(0,0,1)_4$ | 50.16655       | -94.33 | -90.23    |
+
+: *Resumen criterios de información*
+
+-   De acuerdo con esta información, el modelo con los mejores valores es el N° 2, ya que tiene los menores valores de AIC (-95.79) y y un valor relativamente alto del estadístico log-likelihood (49.89).
+
+-   Vale la pena señalar que, a excepción del modelo 3, los valores de los criterios de información son muy similares.
 
 ## Verificación supuestos sobre residuales
 
@@ -484,6 +606,12 @@ for (i in seq_along(modelosentrenados)) {
 }
 ```
 
+-   Los p-valores de la prueba t-student para los cuatro modelos son mayores que 0.05, por lo que no es posible rechazar la hipótesis nula (media = 0).
+
+-   Adicionalmente, los intervalos de confianza para los cuatro modelos incluyen el valor 0.
+
+-   Por lo tanto, se puede concluir que todos los modelos cumplen con el supuesto de tener una media igual a cero.
+
 ### Varianza Constante
 
 ```{r}
@@ -519,6 +647,10 @@ for (i in seq_along(modelosentrenados)) {
 }
 ```
 
+-   Según las gráficas, no se evidencia que ninguno de los modelos tengan variaciones explosivas en los valores estandarizados de los residuales.
+
+-   En los cuatro modelos, los valores estandarizados de los residuales se encuentran en una franja de +/- 1 desviación estándar.
+
 ### No autocorrelación temporal
 
 ```{r}
@@ -544,6 +676,24 @@ for (i in seq_along(modelosentrenados)) {
 }
 ```
 
+**Resultados ACF y PACF de los residuales:**
+
+Modelo 1:
+
+-   De acuerdo con el gráfico ACF, persiste una autocorrelación temporal de los residuales en los rezagos 1 y 5. Esto sugiere que el modelo aún no captura la totalidad de la información que pueden aportar los valores pasados de la variable objetivo. En este modelo se aprecia que persiste una autocorrelación parcial de los residuales al rezago N° 1.
+
+Modelo 2:
+
+-   De acuerdo con el gráfico ACF, persiste una autocorrelación temporal de los residuales en el rezago 5 (sale por un margen mínimo de la banda de significancia). Esto sugiere que el modelo aún no captura la totalidad de la información que pueden aportar los valores pasados de la variable objetivo. En este modelo se aprecia que no persiste una autocorrelación parcial de los residuales a ningún rezago.
+
+Modelo 3:
+
+-   De acuerdo con el gráfico ACF, no persisten autocorrelaciones temporales significativas de los residuales con los valores pasados. Esto sugiere que el modelo captura adecuadamente la totalidad de la información que pueden aportar los valores pasados de la variable objetivo. En este modelo se aprecia que no persiste una autocorrelación parcial de los residuales a ningún rezago.
+
+Modelo autoarima:
+
+-   De acuerdo con el gráfico ACF, no persisten autocorrelaciones temporales significativas de los residuales con los valores pasados. Esto sugiere que el modelo captura adecuadamente la totalidad de la información que pueden aportar los valores pasados de la variable objetivo. Sin embargo, en este modelo se aprecia que persiste una autocorrelación parcial de los residuales al rezago N° 5.
+
 ```{r}
 for (i in seq_along(modelosentrenados)) {
 
@@ -568,6 +718,12 @@ cat("\n========================================================\n")
 }
 ```
 
+**Resultados prueba estadística Ljung-Box:**
+
+-   Para todos los modelos se tiene que los p-valores de la prueba a 10, 15 y 24 rezagos, son mayores a 0.05. Estos valores no permiten rechazar la hipótesis nula (H_0: los datos se distribuyen de forma independiente). Por lo tanto, es posible concluir que en todos los modelos los residuales se distribuyen de manera independiente.
+
+-   Estos resultados se pueden visualizar en las gráficas que se muestran a continuación.
+
 ```{r, fig.height=8, fig.width=8}
 # Gráficos de la prueba Ljung-Box
 for (i in seq_along(modelosentrenados)) {
@@ -589,8 +745,6 @@ for (i in seq_along(modelosentrenados)) {
   tsdiag(modelosentrenados[[i]], gof.lag=24)
   
   mtext(paste(names(modelosentrenados)[i], ". SARIMA", orden_txt), side = 3, line = 1, outer = TRUE, font = 2, cex = 1.1)
-  
-  cat("\n")
   
 }
 ```
@@ -618,6 +772,10 @@ for (i in seq_along(modelosentrenados)) {
 }
 ```
 
+**Resultados gráficos de cuartiles (QQ-plots):**
+
+-   los modelos N° 1 y 2 son los que muestran mejor ajuste a la línea de cuartiles teóricos.
+
 ```{r}
 for (i in seq_along(modelosentrenados)) {
   
@@ -641,6 +799,10 @@ cat("\n========================================================\n")
   
 ```
 
+**Resultados prueba Shapiro-Wilk:**
+
+-   Sólamente en el modelo N° 2, se tiene que el p-valor de la prueba Shapiro-Wilk es mayor a 0.05 y no permite rechazar la hipótesis nula de que los residuales estándar tienen una distribución normal ( $H_0:\text{la población está distribuida normalmente}$ )
+
 ```{r}
 for (i in seq_along(modelosentrenados)) {
   
@@ -660,6 +822,8 @@ for (i in seq_along(modelosentrenados)) {
 ```
 
 ## Modelos SARIMA seleccionados
+
+`{{MODELO 2 Y 3}}`
 
 ## Pruebas sobre pronósticos
 
