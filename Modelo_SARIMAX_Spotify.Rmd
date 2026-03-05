@@ -2,7 +2,11 @@
 title: "Modelo_SARIMAX_Spotify"
 author: "Julian Echeverry - MINE 009"
 date: "2026-03-02"
-output: html_document
+output: 
+  html_document: 
+    toc: yes
+    highlight: espresso
+    theme: sandstone
 ---
 
 ```{r setup, include=FALSE}
@@ -13,9 +17,15 @@ knitr::opts_chunk$set(echo = TRUE)
 
 -   ¿con qu´e variable est´an trabajando?
 
+    -   Número de usuarios de spotify. Incluye categorías premium y fremium
+
 -   c´omo son sus datos
 
+    -   De frecuencia trimestral, para latinoamérica
+
 -   fuente de los datos
+
+    -   Informes de Spotify para inversionistas, compilados por Statista.com
 
 ```{r importacion datos}
 
@@ -35,23 +45,23 @@ library(TSA)
 
 # 1. Calculamos el punto de corte (80% de los datos) como un número entero
 punto_corte <- floor(nrow(usuarios_original) * 0.8)
-# 31 trimestres
+# 31 trimestres: 2016-I ~ 2023-III
 
-# 2. Creamos la serie de tiempo usando el rango
+# 2. Creamos la serie de tiempo usando el rango definido e indicando el año y trimestre en que inicia la serie
 serie_original = ts(usuarios_original[1:punto_corte, 2], start = c(2016, 1), frequency = 4)
 ```
 
 # Descripción de la serie original
 
--   Gráfico
+-   Gráfico de línea temporal
 
 ```{r plot1}
 
-plot( serie_original,col="6", ann=FALSE)
-points(y=serie_original,x=time(serie_original),pch=as.vector(season(serie_original)),col="4")
-title(main="Serie de Número de usuarios Spotify en Latinoamérica", col.main="blue", font.main=2)
-title(xlab="Trimestres", col.lab=rgb(1,0.4,1))
-title(ylab="Número usuarios", col.lab=rgb(1,0.4,1))
+plot( serie_original,col="darkgreen", ann=FALSE)
+points(y=serie_original,x=time(serie_original),pch=as.vector(season(serie_original)),col="green")
+title(main="Serie de Número de usuarios Spotify en Latinoamérica", col.main="darkgreen", font.main=2)
+title(xlab="Trimestres", col.lab="darkgreen") #=rgb(1,0.4,1))
+title(ylab="Número usuarios", col.lab="darkgreen") #=rgb(1,0.4,1))
 
 ```
 
@@ -60,22 +70,22 @@ title(ylab="Número usuarios", col.lab=rgb(1,0.4,1))
 ```{r correlogramas1}
 
 par(mfrow = c(1, 2))
-acf( serie_original,lag.max =10, main = "Autocorrelación (ACF)")
-pacf( serie_original,lag.max =10, main = "Autocorrelación Parcial (PACF)")
+acf( serie_original,lag.max =12, main = "Autocorrelación (ACF)")
+pacf( serie_original,lag.max =12, main = "Autocorrelación Parcial (PACF)")
 
 ```
 
--   Hay tendencia? -\> SÍ
+-   Hay tendencia? -\> SÍ. Es creciente a lo largo de toda la serie.
 
--   Hay estacionalidad? -\> NO se evidencia gráficamente
+-   Hay estacionalidad? -\> NO se evidencia gráficamente. La FAC decae de manera sostenida y después del rezago N° 6, toma valores estadísticamente iguales a cero (dentro de la banda azul).
 
--   Cómo está la varianza? (heteroscedasticidad)
+-   Cómo está la varianza? (heteroscedasticidad). En el gráfico no se evidencia que los datos tomen valores extremos.
 
 # Modelo SARIMA
 
 ## Transformaciones previas
 
-### Diferencias ordinarias y estacionales
+### Serie original - Diferencias ordinarias y estacionales
 
 1.  Criterio de Victor Guerrero - mínima desviación estándar
 
@@ -83,6 +93,8 @@ pacf( serie_original,lag.max =10, main = "Autocorrelación Parcial (PACF)")
 
 s00=sd(serie_original)
 s10=sd(diff(serie_original,lag=1,differences=1))#(1-B) X_{t}
+s101=sd(diff(serie_original,lag=1,differences=2))#(1-B)^2 X_{t}
+
 s01=sd(diff(serie_original,lag=4,differences=1))#(1-B^4) X_{t}
 
 dif1usuarios<-diff(serie_original,lag=1,differences=1)##(1-B) X_{t}
@@ -90,26 +102,52 @@ s11=sd(diff(dif1usuarios,lag=4,differences=1))#(1-B^4)(1-B) X_{t}
 s21=sd(diff(dif1usuarios,lag=4,differences=2))#(1-B^4)^2(1-B) X_{t}
 s20=sd(diff(serie_original,lag=1,differences=2))#(1-B)^2 X_{t}
 
-# AJUSTAR LOS PRINTS DE LOS VALORES S##
-s00
-s10
-s01
-s11
-s21 
-s20
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s00: la serie sin diferenciar es de:\n", s00))
+
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s10: la serie con 1 diferencia ordinaria es de:\n", s10))
+
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s101: la serie con 2 diferencias ordinarias es de:\n", s101))
+
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s01: la serie con 1 diferencia estacional es de:\n", s01))
+
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s11: la serie con 1 diferencia estacional y 1 diferencia ordinaria es de:\n", s11))
+
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s21: la serie con 2 diferencias estacionales y 1 diferencia ordinaria es de:\n", s21))
+
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s20: la serie con 2 diferencias estacionales y ninguna diferencia ordinaria es de:\n", s20))
 
 ```
+
+-   De acuerdo con el criterio de mínima desviación estándar (Víctor Guerrero), la mejor alternativa de diferenciación para la serie de usuarios de Spotify en Latinoamérica es aquella en que a la serie se le aplica sólo 1 diferencia ordinaria ( $SD = 3.07$ ).
 
 2.  Criterio de decaimiento de la FAC
 
 ```{r plot2}
-# Serie con la diferenciación escogida
-dusuarios<-diff(Tasa_desempleo,lag=1,differences=1)
+cat(print("\n\nSerie con 1 diferencia ordinaria\n\n"))
+# Serie con 1 diferencia ordinaria
+dusuarios1<-diff(serie_original,lag=1,differences=1)
 
-plot(dusuarios,ylab='Serie_Usuarios_diferenciada',xlab='Trimestre',type='o')
-x11()
+#plot
+plot(dusuarios1,ylab='Serie_Usuarios_diferenciada',xlab='Trimestre',type='o', main="1 diferencia ordinaria")
 
-acf(dusuarios, lag.max=10)
+#ACF para visualizar decaimiento de la estructura de autocorrelación
+acf(dusuarios1, lag.max=20, main="ACF: 1 diferencia ordinaria")
+
+cat(print("\n\nSerie con 2 diferencias ordinarias\n\n"))
+# Serie con 1 diferencia ordinaria
+dusuarios2<-diff(serie_original,lag=1,differences=2)
+
+#plot
+plot(dusuarios2,ylab='Serie_Usuarios_diferenciada',xlab='Trimestre',type='o', main="2 diferencias ordinarias")
+
+#ACF para visualizar decaimiento de la estructura de autocorrelación
+acf(dusuarios2, lag.max=20, main="ACF: 2 diferencias ordinarias")
 
 ```
 
@@ -120,34 +158,236 @@ acf(dusuarios, lag.max=10)
 library(tseries)
 
 #Pruebas aplicadas a la serie original
+cat(print("\n\nPruebas aplicadas a la serie original\n"))
 adf.test(serie_original)
 pp.test(serie_original)
 
-#Pruebas aplicadas a la serie diferenciada
-adf.test(dusuarios)
-pp.test(dusuarios)
+#Pruebas aplicadas a la serie con 1 diferencia ordinaria
+cat(print("\n\nPruebas aplicadas a la serie con 1 diferencia ordinaria\n"))
+adf.test(dusuarios1)
+pp.test(dusuarios1)
+
+#Pruebas aplicadas a la serie con 2 diferencias ordinarias
+cat(print("\n\nPruebas aplicadas a la serie con 2 diferencias ordinarias\n"))
+adf.test(dusuarios2)
+pp.test(dusuarios2)
+
+#Pruebas aplicadas a la serie con 1 diferencia ordinaria
+cat(print("\n\nPruebas aplicadas a la serie con 1 diferencia ordinaria y 1 estacional\n"))
+adf.test(diff(dif1usuarios,lag=4,differences=1))
+pp.test(diff(dif1usuarios,lag=4,differences=1))
+```
+
+### Serie logaritmo - Diferencias ordinarias y estacionales
+
+```{r serielog}
+
+serie_log <- log(serie_original)
+plot(serie_log)
+
+```
+
+1.  Criterio de Victor Guerrero - mínima desviación estándar
+
+```{r criterio_vguerrero_log}
+sl00=sd(serie_log) 
+sl10=sd(diff(serie_log,lag=1,differences=1))#(1-B) X_{t} 
+sl101=sd(diff(serie_log,lag=1,differences=2))#(1-B)^2 X_{t}  
+sl01=sd(diff(serie_log,lag=4,differences=1))#(1-B^4) X_{t} 
+
+dif1logusuarios<-diff(serie_log,lag=1,differences=1)##(1-B) X_{t} 
+sl11=sd(diff(dif1logusuarios,lag=4,differences=1))#(1-B^4)(1-B) X_{t} 
+sl21=sd(diff(dif1logusuarios,lag=4,differences=2))#(1-B^4)^2(1-B) X_{t} 
+sl20=sd(diff(serie_log,lag=1,differences=2))#(1-B)^2 X_{t}  
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s00: la serie sin diferenciar es de:\n", sl00))   
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s10: la serie con 1 diferencia ordinaria es de:\n", sl10))   
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s101: la serie con 2 diferencias ordinarias es de:\n", sl101))   
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s01: la serie con 1 diferencia estacional es de:\n", sl01))   
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s11: la serie con 1 diferencia estacional y 1 diferencia ordinaria es de:\n", sl11))   
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s21: la serie con 2 diferencias estacionales y 1 diferencia ordinaria es de:\n", sl21))   
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s20: la serie con 2 diferencias estacionales y ninguna diferencia ordinaria es de:\n", sl20)) 
+```
+
+-   De acuerdo con el criterio de mínima desviación estándar (Víctor Guerrero), la mejor alternativa de diferenciación para la serie de usuarios de Spotify en Latinoamérica es aquella en que a la serie se le aplica sólo 1 diferencia ordinaria ( $SD = 0.043$ ).
+
+2.  Criterio de decaimiento de la FAC
+
+```{r plot2_log}
+
+cat(print("\n\nSerie con 1 diferencia ordinaria\n\n"))
+# Serie con 1 diferencia ordinaria 
+dlogusuarios1<-diff(serie_log,lag=1,differences=1)  
+#plot 
+plot(dlogusuarios1,ylab='Serie_Usuarios_diferenciada',xlab='Trimestre',type='o', main="1 diferencia ordinaria")  
+#ACF para visualizar decaimiento de la estructura de autocorrelación 
+acf(dlogusuarios1, lag.max=20, main="ACF: 1 diferencia ordinaria")  
+
+
+cat(print("\n\nSerie con 2 diferencias ordinarias\n\n")) 
+# Serie con 1 diferencia ordinaria 
+dlogusuarios2<-diff(serie_log,lag=1,differences=2)  
+#plot 
+plot(dlogusuarios2,ylab='Serie_Usuarios_diferenciada',xlab='Trimestre',type='o', main="2 diferencias ordinarias")  
+#ACF para visualizar decaimiento de la estructura de autocorrelación 
+acf(dlogusuarios2, lag.max=20, main="ACF: 2 diferencias ordinarias") 
+```
+
+3.  Pruebas estadísticas de raíz unitaria para diferencias ordinarias (ADF y PP)
+
+```{r ADF_PP_log}
+
+#Pruebas aplicadas a la serie transformada con logaritmo natural
+cat(print("\n\nPruebas aplicadas a la serie transformada con logaritmo natural\n"))
+adf.test(serie_log)
+pp.test(serie_log)
+
+#Pruebas aplicadas a la serie con 1 diferencia ordinaria
+cat(print("\n\nPruebas aplicadas a la serie con 1 diferencia ordinaria\n"))
+adf.test(dlogusuarios1)
+pp.test(dlogusuarios1)
+
+#Pruebas aplicadas a la serie con 2 diferencias ordinarias
+cat(print("\n\nPruebas aplicadas a la serie con 2 diferencias ordinarias\n"))
+adf.test(dlogusuarios2)
+pp.test(dlogusuarios2)
+
+#Pruebas aplicadas a la serie con 1 diferencia ordinaria
+cat(print("\n\nPruebas aplicadas a la serie con 1 diferencia ordinaria y 1 estacional\n"))
+adf.test(diff(dif1logusuarios,lag=4,differences=1))
+pp.test(diff(dif1logusuarios,lag=4,differences=1))
+```
+
+### Serie boxcox - Diferencias ordinarias y estacionales
+
+```{r serieboxcox}
+library(forecast)
+lambda_optimo <- BoxCox.lambda(serie_original) # Encuentra el mejor lambda
+print(cat("El valor óptimo del lambda es de", lambda_optimo))
+serie_boxcox <- BoxCox(serie_original, lambda = lambda_optimo)
+plot(serie_boxcox)
+```
+
+1\. Criterio de Victor Guerrero - mínima desviación estándar
+
+```{r criterio_vguerrero_boxcox}
+sbc00=sd(serie_boxcox) 
+sbc10=sd(diff(serie_boxcox,lag=1,differences=1))#(1-B) X_{t} 
+sbc101=sd(diff(serie_boxcox,lag=1,differences=2))#(1-B)^2 X_{t}  
+sbc01=sd(diff(serie_boxcox,lag=4,differences=1))#(1-B^4) X_{t} 
+
+dif1boxcoxusuarios<-diff(serie_boxcox,lag=1,differences=1)##(1-B) X_{t} 
+sbc11=sd(diff(dif1boxcoxusuarios,lag=4,differences=1))#(1-B^4)(1-B) X_{t} 
+sbc21=sd(diff(dif1boxcoxusuarios,lag=4,differences=2))#(1-B^4)^2(1-B) X_{t} 
+sbc20=sd(diff(serie_boxcox,lag=1,differences=2))#(1-B)^2 X_{t}  
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s00: la serie sin diferenciar es de:\n", sbc00))   
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s10: la serie con 1 diferencia ordinaria es de:\n", sbc10))   
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s101: la serie con 2 diferencias ordinarias es de:\n", sbc101))   
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s01: la serie con 1 diferencia estacional es de:\n", sbc01))   
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s11: la serie con 1 diferencia estacional y 1 diferencia ordinaria es de:\n", sbc11))   
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s21: la serie con 2 diferencias estacionales y 1 diferencia ordinaria es de:\n", sbc21))   
+
+cat(paste("\n\nEl valor de la desviación estándar de la alternativa s20: la serie con 2 diferencias estacionales y ninguna diferencia ordinaria es de:\n", sbc20))
+
+```
+
+2\. Criterio de decaimiento de la FAC
+
+```{r plot2_boxcox}
+
+cat(print("\n\nSerie con 1 diferencia ordinaria\n\n"))
+# Serie con 1 diferencia ordinaria 
+dboxcoxusuarios1<-diff(serie_boxcox,lag=1,differences=1)  
+#plot 
+plot(dboxcoxusuarios1,ylab='Serie_Usuarios_diferenciada',xlab='Trimestre',type='o', main="1 diferencia ordinaria")  
+#ACF para visualizar decaimiento de la estructura de autocorrelación 
+acf(dboxcoxusuarios1, lag.max=20, main="ACF: 1 diferencia ordinaria")  
+
+
+cat(print("\n\nSerie con 2 diferencias ordinarias\n\n")) 
+# Serie con 1 diferencia ordinaria 
+dboxcoxusuarios2<-diff(serie_boxcox,lag=1,differences=2)  
+#plot 
+plot(dboxcoxusuarios2,ylab='Serie_Usuarios_diferenciada',xlab='Trimestre',type='o', main="2 diferencias ordinarias")  
+#ACF para visualizar decaimiento de la estructura de autocorrelación 
+acf(dboxcoxusuarios2, lag.max=20, main="ACF: 2 diferencias ordinarias")
+
+```
+
+3\. Pruebas estadísticas de raíz unitaria para diferencias ordinarias (ADF y PP)
+
+```{r ADF_PP_boxcox}
+
+#Pruebas aplicadas a la serie transformada con boxcox natural
+cat(print("\n\nPruebas aplicadas a la serie transformada con boxcox\n"))
+adf.test(serie_boxcox)
+pp.test(serie_boxcox)
+
+#Pruebas aplicadas a la serie con 1 diferencia ordinaria
+cat(print("\n\nPruebas aplicadas a la serie con 1 diferencia ordinaria\n"))
+adf.test(dboxcoxusuarios1)
+pp.test(dboxcoxusuarios1)
+
+#Pruebas aplicadas a la serie con 2 diferencias ordinarias
+cat(print("\n\nPruebas aplicadas a la serie con 2 diferencias ordinarias\n"))
+adf.test(dboxcoxusuarios2)
+pp.test(dboxcoxusuarios2)
+
+#Pruebas aplicadas a la serie con 1 diferencia ordinaria
+cat(print("\n\nPruebas aplicadas a la serie con 1 diferencia ordinaria y 1 estacional\n"))
+adf.test(diff(dif1boxcoxusuarios,lag=4,differences=1))
+pp.test(diff(dif1boxcoxusuarios,lag=4,differences=1))
+
 ```
 
 ## identificación del modelo
 
 Correlogramas de la serie diferenciada
 
-```{r correlogramas2}
-
-serie_diferenciada <- "$%&"
+```{r}
+serie_diferenciada1 <- diff(serie_log,lag=1,differences=1)
 
 par(mfrow = c(1, 2))
-acf( serie_diferenciada,lag.max =10, main = "Autocorrelación (ACF)")
-pacf( serie_diferenciada,lag.max =10, main = "Autocorrelación Parcial (PACF)")
+acf( serie_diferenciada1,lag.max =12, main = "Autocorrelación (ACF)\n1 Diferencia Ordinaria")
+pacf( serie_diferenciada1,lag.max =12, main = "Autocorrelación Parcial (PACF)\n1 Diferencia Ordinaria")
 ```
+
+```{r correlogramas2}
+
+serie_diferenciada2 <- diff(serie_log,lag=1,differences=2)
+
+par(mfrow = c(1, 2))
+acf( serie_diferenciada2,lag.max =12, main = "Autocorrelación (ACF)\n2 Diferencias Ordinarias")
+pacf( serie_diferenciada2,lag.max =12, main = "Autocorrelación Parcial (PACF)\n2 Diferencias Ordinarias")
+```
+
+A partir de los gráficos de ACF y PACF, se proponen los siguientes modelos a partir de la serie transformada con el logaritmo natural:
+
+-   Modelo 1: $SARIMA(0,2,1)(0,0,0)_4$
+
+-   Modelo 2: $SARIMA(1,2,1)(0,0,0)_4$
+
+-   Modelo 3: $SARIMA(0,2,1)(0,1,1)_4$
 
 ## Estimación de parámetros
 
 Modelo 1
 
 ```{r modelo1}
-modelo1=arima(serie_original,order=c(0,1,1),
-              seasonal=list(order=c(1,1,0),period=12))
+modelo1=arima(serie_log,order=c(0,2,1),
+              seasonal=list(order=c(0,0,0),period=4))
 
 modelo1
 
@@ -159,8 +399,8 @@ confint(modelo1)
 Modelo 2
 
 ```{r modelo2}
-modelo2=arima(serie_original,order=c(0,1,1),
-              seasonal=list(order=c(1,1,0),period=12))
+modelo2=arima(serie_log,order=c(1,2,1),
+              seasonal=list(order=c(0,0,0),period=4))
 
 modelo2
 
@@ -171,8 +411,8 @@ confint(modelo2)
 Modelo 3
 
 ```{r modelo3}
-modelo3=arima(serie_original,order=c(0,1,1),
-              seasonal=list(order=c(1,1,0),period=12))
+modelo3=arima(serie_log,order=c(0,2,1),
+              seasonal=list(order=c(0,1,1),period=4))
 
 modelo3
 
@@ -193,66 +433,230 @@ modelo_autoarima
 
 ## Verificación supuestos sobre residuales
 
+```{r lista_modelos}
+
+modelosentrenados <- list(
+  "Modelo 1" = modelo1, 
+  "Modelo 2" = modelo2, 
+  "Modelo 3" = modelo3, 
+  "Auto-ARIMA" = modelo_autoarima
+)
+```
+
 ### Media = 0
 
 ```{r}
 
-modelo <- "#$%"
+for (i in seq_along(modelosentrenados)) {
+  
+  # 1. Extraer el vector de órdenes
+  # El orden en $arma es: [p, q, P, Q, s, d, D]
+  o <- modelosentrenados[[i]]$arma
+  
+  # 2. Construir la etiqueta de los órdenes
+  # Formato: (p,d,q)(P,D,Q)[s]
+  orden_txt <- paste0("(", o[1], ",", o[6], ",", o[2], ")", 
+                      "(", o[3], ",", o[7], ",", o[4], ")[", o[5], "]")
+  
+  # 3. Generar el gráfico con título dinámico
+  residuos <- rstandard(modelosentrenados[[i]])
+  
+  plot(residuos,
+       ylab = 'Residuales estandarizados',
+       type = 'b',
+       main = paste("Residuales del modelo:", names(modelosentrenados)[i], "\n SARIMA", orden_txt))
+  
+  abline(h = 0, col = "red", lty = 2)
+}
 
-plot(rstandard(modelo),ylab='Standardized residuals',type='b',main=expression(Residuals~~from~~the~~ARIMA(list(1,1,0))%*%(list(0,1,1))[12]~~Model))
-abline(h=0)
+
 ```
 
 ```{r}
 #Para ver si tienen media cero creamos un intervalo de confianza bajo la hipotesis nula
 #haga una prueba t para la media
-t.test(modelo$residuals)
+
+for (i in seq_along(modelosentrenados)) {
+  cat("\n--- Análisis de Residuos:", names(modelosentrenados)[i], "---\n")
+  
+  # Usamos residuals() por seguridad y print() para ver el resultado
+  print(t.test(residuals(modelosentrenados[[i]])))
+}
 ```
 
 ### Varianza Constante
 
 ```{r}
-a=sd(rstandard(modelo))
-#Para ver si teiene varianza cte, observe la grafica
-x11()
-plot(modelo$residuals, ylim=c(-3,3))
-abline(h=-3*a) #Simula una desviación de 3 desviaciones -> valores extremos
-abline(h=+3*a)
+
+for (i in seq_along(modelosentrenados)) {
+  
+  # 1. Extraer el vector de órdenes
+  # El orden en $arma es: [p, q, P, Q, s, d, D]
+  o <- modelosentrenados[[i]]$arma
+  
+  # 2. Construir la etiqueta de los órdenes
+  # Formato: (p,d,q)(P,D,Q)[s]
+  orden_txt <- paste0("(", o[1], ",", o[6], ",", o[2], ")", 
+                      "(", o[3], ",", o[7], ",", o[4], ")[", o[5], "]")
+  
+  # 3. Gráfico con título dinámico
+  a=sd(rstandard(modelosentrenados[[i]]))
+  #Para ver si tiene varianza constante, observe la grafica
+  plot(modelosentrenados[[i]]$residuals, ylim=c(-3,3), main = paste("Residuales del modelo:", names(modelosentrenados)[i], "\n SARIMA", orden_txt), ylab = 'Residuales estandarizados')
+  
+  #Simula una franja de 3 desviaciones estándar-> valores extremos
+  abline(h=-3*a,  col = "red3", lty=2) 
+  abline(h=+3*a,  col = "red3", lty=2)
+  
+  #Simula una franja de 2 desviaciones estándar
+  abline(h=-2*a,  col = "thistle", lty=2) 
+  abline(h=+2*a,  col = "thistle", lty=2)
+  
+  #Simula una franja de 1 desviación estándar
+  abline(h=-1*a,  col = "paleturquoise2", lty=2) 
+  abline(h=+1*a,  col = "paleturquoise2", lty=2)
+
+}
 ```
 
 ### No autocorrelación temporal
 
 ```{r}
 
-# Criterio gráfico
-opcion = par(mfrow=c(2,1))
-acf(modelo$residuals,lag.max=10)
-pacf(modelo$residuals,lag.max=10)
+for (i in seq_along(modelosentrenados)) {
+  
+  # Criterio gráfico
+  opcion = par(mfrow=c(1,2))
 
-# Prueba de Ljung-Box
-Box.test(residuals(modelo),lag=10,type="Ljung" )
-Box.test(residuals(modelo),lag=13,type="Ljung" )
-Box.test(residuals(modelo),lag=25,type="Ljung" )
+  # 1. Extraer el vector de órdenes
+  # El orden en $arma es: [p, q, P, Q, s, d, D]
+  o <- modelosentrenados[[i]]$arma
+  
+  # 2. Construir la etiqueta de los órdenes
+  # Formato: (p,d,q)(P,D,Q)[s]
+  orden_txt <- paste0("(", o[1], ",", o[6], ",", o[2], ")", 
+                      "(", o[3], ",", o[7], ",", o[4], ")[", o[5], "]")
+  # gráficos
+  acf(modelosentrenados[[i]]$residuals,lag.max=16, main = paste("ACF del modelo:", names(modelosentrenados)[i], "\n SARIMA", orden_txt))
 
+  pacf(modelosentrenados[[i]]$residuals,lag.max=16, main = paste("PACF del modelo:", names(modelosentrenados)[i], "\n SARIMA", orden_txt))
+	
+}
+```
+
+```{r}
+for (i in seq_along(modelosentrenados)) {
+
+  # 1. Extraer el vector de órdenes
+  # El orden en $arma es: [p, q, P, Q, s, d, D]
+  o <- modelosentrenados[[i]]$arma
+  
+  # 2. Construir la etiqueta de los órdenes
+  # Formato: (p,d,q)(P,D,Q)[s]
+  orden_txt <- paste0("(", o[1], ",", o[6], ",", o[2], ")", 
+                      "(", o[3], ",", o[7], ",", o[4], ")[", o[5], "]")
+  
+cat("\n========================================================\n")
+  cat("DIAGNÓSTICO:", names(modelosentrenados)[i], "SARIMA", orden_txt, "\n")
+  cat("========================================================\n")
+
+  # 3. Prueba de Ljung-Box (Ahora con print para que se visualicen)
+  print(Box.test(residuals(modelosentrenados[[i]]), lag = 10, type = "Ljung"))
+  print(Box.test(residuals(modelosentrenados[[i]]), lag = 15, type = "Ljung"))
+  print(Box.test(residuals(modelosentrenados[[i]]), lag = 24, type = "Ljung"))
+
+}
+```
+
+```{r, fig.height=8, fig.width=8}
 # Gráficos de la prueba Ljung-Box
+for (i in seq_along(modelosentrenados)) {
 
-tsdiag(modelo, gof.lag=24)
+  # 1. Extraer el vector de órdenes
+  # El orden en $arma es: [p, q, P, Q, s, d, D]
+  o <- modelosentrenados[[i]]$arma
+  
+  # 2. Construir la etiqueta de los órdenes
+  # Formato: (p,d,q)(P,D,Q)[s]
+  orden_txt <- paste0("(", o[1], ",", o[6], ",", o[2], ")", 
+                      "(", o[3], ",", o[7], ",", o[4], ")[", o[5], "]")
+  
+  par(mar = c(3, 3, 2, 1), mgp = c(2, 0.7, 0))
+  par(cex = 0.6) # Reduce todo el texto al 60%
+  par(oma = c(0, 0, 3, 0))
+  
+  # 3. Diagnósticos de la serie de tiempo
+  tsdiag(modelosentrenados[[i]], gof.lag=24)
+  
+  mtext(paste(names(modelosentrenados)[i], ". SARIMA", orden_txt), side = 3, line = 1, outer = TRUE, font = 2, cex = 1.1)
+  
+  cat("\n")
+  
+}
 ```
 
 ### Residuos estándar como ruido blanco
 
 ```{r}
-qqnorm(rstandard(modelo))
-qqline(rstandard(modelo))
+for (i in seq_along(modelosentrenados)) {
+  
+  # 1. Extraer el vector de órdenes
+  # El orden en $arma es: [p, q, P, Q, s, d, D]
+  o <- modelosentrenados[[i]]$arma
+  
+  # 2. Construir la etiqueta de los órdenes
+  # Formato: (p,d,q)(P,D,Q)[s]
+  orden_txt <- paste0("(", o[1], ",", o[6], ",", o[2], ")", 
+                      "(", o[3], ",", o[7], ",", o[4], ")[", o[5], "]")
 
+  # 3. Gráficos  
+  qqnorm(rstandard(modelosentrenados[[i]]), main = paste("Q-Q plots para los residuales del ", names(modelosentrenados)[i], "\n SARIMA", orden_txt))
+  qqline(rstandard(modelosentrenados[[i]]))
+  
+  # mtext(paste(names(modelosentrenados)[i], ". SARIMA", orden_txt), side = 3, line = 1, outer = TRUE, font = 2, cex = 1.1)
+  
+}
 ```
 
 ```{r}
-shapiro.test(rstandard(modelo))
+for (i in seq_along(modelosentrenados)) {
+  
+  # 1. Extraer el vector de órdenes
+  # El orden en $arma es: [p, q, P, Q, s, d, D]
+  o <- modelosentrenados[[i]]$arma
+  
+  # 2. Construir la etiqueta de los órdenes
+  # Formato: (p,d,q)(P,D,Q)[s]
+  orden_txt <- paste0("(", o[1], ",", o[6], ",", o[2], ")", 
+                      "(", o[3], ",", o[7], ",", o[4], ")[", o[5], "]")
+  
+cat("\n========================================================\n")
+  cat("DIAGNÓSTICO:", names(modelosentrenados)[i], "SARIMA", orden_txt, "\n")
+  cat("========================================================\n")
+
+  
+  print(shapiro.test(rstandard(modelosentrenados[[i]])))
+  
+}
+  
 ```
 
 ```{r}
-hist(rstandard(modelo))
+for (i in seq_along(modelosentrenados)) {
+  
+  # 1. Extraer el vector de órdenes
+  # El orden en $arma es: [p, q, P, Q, s, d, D]
+  o <- modelosentrenados[[i]]$arma
+  
+  # 2. Construir la etiqueta de los órdenes
+  # Formato: (p,d,q)(P,D,Q)[s]
+  orden_txt <- paste0("(", o[1], ",", o[6], ",", o[2], ")", 
+                      "(", o[3], ",", o[7], ",", o[4], ")[", o[5], "]")
+
+  # 3. Gráfico
+  hist(rstandard(modelosentrenados[[i]]), main = paste("Histograma para los residuales del ", names(modelosentrenados)[i], "\n SARIMA", orden_txt), xlab = "Residuales")
+  
+}
 ```
 
 ## Modelos SARIMA seleccionados
