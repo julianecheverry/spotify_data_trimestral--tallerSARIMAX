@@ -36,6 +36,14 @@ library(readxl)
 usuarios_original <- read_excel("statistic_id813870_spotifys-maus-in-latin-america-2016-2025.xlsx", 
     sheet = "plaintextdata_maus_latam")
 
+usuarios_original_ts = ts(usuarios_original[, 2], start = c(2016, 1), frequency = 4)
+
+```
+
+```{r}
+usuarios_original_ts
+
+plot(usuarios_original_ts)
 ```
 
 -   Construir el objeto de tipo serie de tiempo, con el 80% de los registros de la serie original
@@ -506,9 +514,8 @@ Modelo 3:
 
 -   ✅El intervalo de confianza para el coeficiente MA1 no incluye el valor cero, por lo que se concluye que el coeficiente \`ma1=-0.986\` es estadísticamente significativo.
 
-```{=html}
 <!-- -->
-```
+
 -   ✅El intervalo de confianza para el coeficiente SMA1 no incluye el valor cero, por lo que se concluye que el coeficiente \`sma1=-0.8832\` es estadísticamente significativo.
 
 ```{r modelo3}
@@ -541,7 +548,7 @@ confint(modelo_autoarima)
 A continuación se muestra un cuadro resumen con los valores de los criterios de información de cada modelo:
 
 | Modelo                                    | Log-Likelihood | AIC    | BIC       |
-|---------------------|-----------------|-----------------|-----------------|
+|--------------------|------------------|------------------|------------------|
 | Modelo 1: $SARIMA(0,2,1)(0,0,0)_4$        | 48.71801       | -95.44 | -90.70143 |
 | Modelo 2: $SARIMA(1,2,1)(0,0,0)_4$        | 49.89493       | -95.79 | -89.68798 |
 | Modelo 3: $SARIMA(0,2,1)(0,1,1)_4$        | 35.12435       | -66.25 | -60.59207 |
@@ -669,28 +676,28 @@ for (i in seq_along(modelosentrenados)) {
   orden_txt <- paste0("(", o[1], ",", o[6], ",", o[2], ")", 
                       "(", o[3], ",", o[7], ",", o[4], ")[", o[5], "]")
   # gráficos
-  acf(modelosentrenados[[i]]$residuals,lag.max=16, main = paste("ACF del modelo:", names(modelosentrenados)[i], "\n SARIMA", orden_txt))
+  acf(modelosentrenados[[i]]$residuals,lag.max=16, main = paste("ACF-Residuales del modelo:", names(modelosentrenados)[i], "\n SARIMA", orden_txt))
 
-  pacf(modelosentrenados[[i]]$residuals,lag.max=16, main = paste("PACF del modelo:", names(modelosentrenados)[i], "\n SARIMA", orden_txt))
+  pacf(modelosentrenados[[i]]$residuals,lag.max=16, main = paste("PACF-Residuales del modelo:", names(modelosentrenados)[i], "\n SARIMA", orden_txt))
 	
 }
 ```
 
 **Resultados ACF y PACF de los residuales:**
 
-Modelo 1:
+❌Modelo 1:
 
 -   De acuerdo con el gráfico ACF, persiste una autocorrelación temporal de los residuales en los rezagos 1 y 5. Esto sugiere que el modelo aún no captura la totalidad de la información que pueden aportar los valores pasados de la variable objetivo. En este modelo se aprecia que persiste una autocorrelación parcial de los residuales al rezago N° 1.
 
-Modelo 2:
+✅Modelo 2:
 
 -   De acuerdo con el gráfico ACF, persiste una autocorrelación temporal de los residuales en el rezago 5 (sale por un margen mínimo de la banda de significancia). Esto sugiere que el modelo aún no captura la totalidad de la información que pueden aportar los valores pasados de la variable objetivo. En este modelo se aprecia que no persiste una autocorrelación parcial de los residuales a ningún rezago.
 
-Modelo 3:
+✅Modelo 3:
 
 -   De acuerdo con el gráfico ACF, no persisten autocorrelaciones temporales significativas de los residuales con los valores pasados. Esto sugiere que el modelo captura adecuadamente la totalidad de la información que pueden aportar los valores pasados de la variable objetivo. En este modelo se aprecia que no persiste una autocorrelación parcial de los residuales a ningún rezago.
 
-Modelo autoarima:
+❌Modelo autoarima:
 
 -   De acuerdo con el gráfico ACF, no persisten autocorrelaciones temporales significativas de los residuales con los valores pasados. Esto sugiere que el modelo captura adecuadamente la totalidad de la información que pueden aportar los valores pasados de la variable objetivo. Sin embargo, en este modelo se aprecia que persiste una autocorrelación parcial de los residuales al rezago N° 5.
 
@@ -774,7 +781,8 @@ for (i in seq_along(modelosentrenados)) {
 
 **Resultados gráficos de cuartiles (QQ-plots):**
 
--   los modelos N° 1 y 2 son los que muestran mejor ajuste a la línea de cuartiles teóricos.
+-   Los modelos N° 1 y 2 son los que muestran mejor ajuste a la línea de cuartiles teóricos.
+-   En los modelo N° 3 y 4, se observa un desajuste respecto a la línea de cuartiles teóricos, sólo en los extremos de la gráfico. Este es un comportamiento común <!--# CONFIRMAR -->en las aplicaciones de modelos SARIMA.
 
 ```{r}
 for (i in seq_along(modelosentrenados)) {
@@ -825,13 +833,201 @@ for (i in seq_along(modelosentrenados)) {
 
 `{{MODELO 2 Y 3}}`
 
+-   Tomando como criterio diferenciador los resultados de los correlogramas de los residuos de los modelos, se escogen los modelo N° 2 y 3.
+
+-   Por otra parte, los modelos N° 1 y 4 cumplieron con la mayoría de los supuestos sobre los residuos, a excepción de la no autocorrelación temporal de los residuos.
+
 ## Pruebas sobre pronósticos
+
+### Pruebas al modelo 2
+
+```{r predicciones_modelo2}
+
+m2.predicted_log <- serie_log - modelo2$residuals
+m2.predicted_log
+
+```
+
+preds en escala original -\> Las funciones fitted(modelo) o predict(modelo) en R ya devuelven los valores "re-integrados". Es decir, el resultado de fitted(modelo2) ya está en niveles de serie_log, no en diferencias.
+
+Debido a que la función exponencial es convexa, la simple transformación inversa tiende a subestimar el valor real. Para corregirlo, se suma la mitad de la varianza del error (\$\\sigma\^2/2\$) antes de aplicar la exponencial.
+
+```{r}
+# 2. Extraer la varianza del error (sigma^2) del modelo
+# En tu imagen f8ec9a es 0.001776
+s2 <- modelo2$sigma2
+
+# 3. Aplicar transformación inversa con corrección de Jensen
+# Fórmula: exp(log_pred + sigma^2 / 2)
+m2.predicted_insample.2 <- round(exp(m2.predicted_log + (s2 / 2)), 0)
+```
+
+```{r}
+library(flextable)
+# Dataframe con valores pronosticados intra-muestra
+flextable(data.frame(serie_original, m2.predicted_insample.2))
+```
+
+```{r}
+# Gráfico de pronósticos intramuestra y valores originales
+
+ts.plot(m2.predicted_insample.2, serie_original, col=c("green", "black"), type="o", ylim=c(1,200), xlim=c(2016,2025), main = "Valores originales vs. Predicciones (Escala Real)")
+
+# Agregar la leyenda
+legend("topleft", 
+       legend = c("Predicción (Modelo 2)", "Serie Original"), 
+       col = c("green", "black"), 
+       lty = 1, 
+       pch = 1,       # Añade el círculo (puntos) a la leyenda por el type="o"
+       bty = "n",     # Quita el recuadro de la leyenda para que se vea más limpio
+       cex = 0.8)     # Ajusta el tamaño del texto
+
+```
+
+```{r metricas_prediccion.m2}
+library(MLmetrics)
+
+## Mean Absolute Percentage Error Loss (%):
+cat("\n\nMean Absolute Percentage Error Loss-MAPE(%):\n")
+MAPE <- MLmetrics::MAPE(m2.predicted_insample.2, serie_original)*100
+MAPE
+
+## Error cuadrático medio (unidades originales)
+cat("\n\nError cuadrático medio (RMSE):\n")
+RMSE <- MLmetrics::RMSE(m2.predicted_insample.2, serie_original)
+RMSE
+
+## Error absoluto medio:
+cat("\n\nError Absoluto Medio (MAE):\n")
+MAE <- MLmetrics::MAE(m2.predicted_insample.2, serie_original)
+MAE
+
+
+```
+
+```{r}
+
+# 1. Pronósticos en escala logarítmica
+prod.pr = predict(modelo2, n.ahead=10)
+s2 <- modelo2$sigma2 #Corrección de Jensen
+
+# 2. Pronósticos y bandas de confianza en escala original
+pred_original <- exp(prod.pr$pred + (s2 / 2))
+U_original    <- exp((prod.pr$pred + 2 * prod.pr$se) + (s2 / 2))
+L_original    <- exp((prod.pr$pred - 2 * prod.pr$se) + (s2 / 2))
+
+# 3. Gráfico
+ts.plot(usuarios_original_ts,pred_original, col=c("black", "blue"), type="o", ylim=c(1,250), xlim=c(2016,2026),
+main="PRONOSTICOS SERIE DE USUARIOS SPOTIFY LATAM",ylab="N° Usuarios",xlab="Trimestre")
+ lines(U_original, col="red", lty="dashed")
+ lines(L_original, col="red", lty="dashed")
+abline(v=2020,lty="dotted",col="11")
+
+# 4. Leyenda del gráfico
+
+abline(v = 2020.50, lty = "dotted", col = "darkgreen")
+legend("topleft", 
+       legend = c("Histórico", "Pronóstico", "IC 95%"), 
+       col = c("black", "blue", "red"), 
+       lty = c(1, 1, 2), 
+       lwd = c(1, 2, 1),
+       bty = "n")
+
+```
+
+### Pruebas al modelo 3
+
+```{r predicciones_modelo3}
+
+m3.predicted_log <- serie_log - modelo3$residuals
+m3.predicted_log
+
+```
+
+```{r}
+# 2. Extraer la varianza del error (sigma^2) del modelo
+s2 <- modelo3$sigma2
+
+# 3. Aplicar transformación inversa con corrección de Jensen
+# Fórmula: exp(log_pred + sigma^2 / 2)
+m3.predicted_insample.2 <- round(exp(m3.predicted_log + (s2 / 2)), 0)
+```
+
+```{r}
+library(flextable)
+# Dataframe con valores pronosticados intra-muestra
+flextable(data.frame(serie_original, m3.predicted_insample.2))
+```
+
+```{r}
+# Gráfico de pronósticos intramuestra y valores originales
+
+ts.plot(m3.predicted_insample.2, serie_original, col=c("green", "black"), type="o", ylim=c(1,200), xlim=c(2016,2025), main = "Valores originales vs. Predicciones (Escala Real)")
+
+# Agregar la leyenda
+legend("topleft", 
+       legend = c("Predicción (Modelo 3)", "Serie Original"), 
+       col = c("green", "black"), 
+       lty = 1, 
+       pch = 1,       # Añade el círculo (puntos) a la leyenda por el type="o"
+       bty = "n",     # Quita el recuadro de la leyenda para que se vea más limpio
+       cex = 0.8)     # Ajusta el tamaño del texto
+```
+
+```{r metricas_prediccion.m3}
+library(MLmetrics)
+
+## Mean Absolute Percentage Error Loss (%):
+cat("\n\nMean Absolute Percentage Error Loss-MAPE(%):\n")
+MAPE <- MLmetrics::MAPE(m3.predicted_insample.2, serie_original)*100
+MAPE
+
+## Error cuadrático medio (unidades originales)
+cat("\n\nError cuadrático medio (RMSE):\n")
+RMSE <- MLmetrics::RMSE(m3.predicted_insample.2, serie_original)
+RMSE
+
+## Error absoluto medio:
+cat("\n\nError Absoluto Medio (MAE):\n")
+MAE <- MLmetrics::MAE(m3.predicted_insample.2, serie_original)
+MAE
+
+```
+
+```{r}
+# 1. Pronósticos en escala logarítmica
+m3.prod.pr = predict(modelo3, n.ahead=10)
+s2 <- modelo3$sigma2 #Corrección de Jensen
+
+# 2. Pronósticos y bandas de confianza en escala original
+m3.pred_original <- exp(m3.prod.pr$pred + (s2 / 2))
+m3.U_original    <- exp((m3.prod.pr$pred + 2 * m3.prod.pr$se) + (s2 / 2))
+m3.L_original    <- exp((m3.prod.pr$pred - 2 * m3.prod.pr$se) + (s2 / 2))
+
+# 3. Gráfico
+ts.plot(usuarios_original_ts, m3.pred_original, col=c("black", "blue"), type="o", ylim=c(1,250), xlim=c(2016,2026),
+main="PRONOSTICOS SERIE DE USUARIOS SPOTIFY LATAM",ylab="N° Usuarios",xlab="Trimestre")
+ lines(m3.U_original, col="red", lty="dashed")
+ lines(m3.L_original, col="red", lty="dashed")
+abline(v=2020,lty="dotted",col="11")
+
+# 4. Leyenda del gráfico
+
+abline(v = 2020.50, lty = "dotted", col = "darkgreen")
+legend("topleft", 
+       legend = c("Histórico", "Pronóstico", "IC 95%"), 
+       col = c("black", "blue", "red"), 
+       lty = c(1, 1, 2), 
+       lwd = c(1, 2, 1),
+       bty = "n")
+```
 
 ## Resumen de resultados
 
 Resultados:
 
--   \$%&
+-   Los pronósticos del modelo N° 3 siguen mejor la tendencia de la ventana de datos que no observó el modelo.
+-   <!--# SOBRE LAS MÉTRICAS - MAPE Y DEMÁS -->
 
 Problemas encontrados:
 
@@ -840,3 +1036,7 @@ Problemas encontrados:
 ¿por qu´e el modelo final es el adecuado?
 
 # Modelo SARIMAX
+
+-   <!--# VARIABLE DUMMY -> NOTICIAS USA -->
+
+-   <!--# VARIABLE CONTINUA - DESEMPLEO USA -->
