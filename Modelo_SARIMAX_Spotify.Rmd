@@ -1,31 +1,29 @@
 ---
-title: "Modelo_SARIMAX_Spotify"
+title: "Modelo SARIMA: Caso Spotify 2016-2025"
 author: "Julian Echeverry - MINE 009"
-date: "2026-03-02"
+date: "2026-03-07"
 output: 
   html_document: 
     toc: yes
-    highlight: espresso
-    theme: sandstone
+    toc_float: true
+    highlight: haddock
+    theme: united
+    df_print: default
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+![](Spotify_logo_3.png)
+
 # Introducción
 
--   ¿con qué variable están trabajando?
+En el presente ejercicio se busca aplicar el algoritmo Box-Jenkins para generar un modelo SARIMA que permita predecir el [***número total trimestral de usuarios de Spotify (en millones) en la región de Latinoamérica***]{.underline}.
 
-    -   Número de usuarios de spotify. Incluye categorías premium y fremium
+La serie tiene una frecuencia trimestral para el período entre 2016-I y 2025-III. Por otra parte, las cifras incluyen a los usuarios de las categorías pagas (premium familiar, premium personal, premium duo), así como a los usuarios cuya experiencia contiene avisos publicitarios (modelo fremium).
 
--   cómo son sus datos
-
-    -   De frecuencia trimestral, para latinoamérica
-
--   fuente de los datos
-
-    -   Informes de Spotify para inversionistas, compilados por Statista.com
+Esta información proviene de los informes trimestrales de Spotify para inversionistas (*Spotify Shareholder Deck*), los cuales fueron compilados por Statista.com y obtenidos a través de la cuenta de la Universidad Externado de Colombia en el sitio Statista.com.
 
 ```{r importacion datos}
 
@@ -38,28 +36,30 @@ usuarios_original <- read_excel("statistic_id813870_spotifys-maus-in-latin-ameri
 
 usuarios_original_ts = ts(usuarios_original[, 2], start = c(2016, 1), frequency = 4)
 
-```
-
-```{r}
 usuarios_original_ts
 
-plot(usuarios_original_ts)
 ```
 
--   Construir el objeto de tipo serie de tiempo, con el 80% de los registros de la serie original
+-   Luego de importar los datos desde el archivo Excel, se procede a generar las series de tiempo de entrenamiento y prueba, con un punto de corte de 80% de la serie de tiempo original.
+-   Conjunto de entrenamiento: 31 trimestres (2016-I a 2023-III)
+-   Conjunto de prueba: 8 trimestres (2023-IV a 2025-III)
 
 ```{r serie_original}
 library(TSA)
 
-# 1. Calculamos el punto de corte (80% de los datos) como un número entero
+# 1. Calculamos el punto de corte (80% de los datos) como un número entero para dividir los datos en conjunto de entrenamiento y de prueba
 punto_corte <- floor(nrow(usuarios_original) * 0.8)
 # 31 trimestres: 2016-I ~ 2023-III
 
-# 2. Creamos la serie de tiempo usando el rango definido e indicando el año y trimestre en que inicia la serie
+# 2. Creamos la serie de tiempo de entrenamiento usando el rango definido e indicando el año y trimestre en que inicia la serie
 serie_original = ts(usuarios_original[1:punto_corte, 2], start = c(2016, 1), frequency = 4)
+
+# 3. extraer el conjunto de prueba de los datos originales
+conjunto_prueba <- ts(usuarios_original[(punto_corte+1):nrow(usuarios_original), 2], start = c(2023, 4), frequency = 4)
+
 ```
 
-# Descripción de la serie original
+# Descripción de los datos de entrenamiento
 
 -   Gráfico de línea temporal
 
@@ -73,6 +73,12 @@ title(ylab="Número usuarios", col.lab="darkgreen") #=rgb(1,0.4,1))
 
 ```
 
+-   Como se aprecia en la gráfica, la serie muestra una tendencia creciente, con un descenso en el número de usuarios entre el 2020-III y 2020-IV. Este movimiento viene influenciado por los efectos económicos de las medidas de aislamiento que tomaron los gobiernos de la región debido a la pandemia por COVID-19.
+
+-   A excepción de los datos del año 2020, no se evidencia una alta volatilidad en los valores de la variable objetivo.
+
+-   Respecto a la estacionalidad, no se evidencia gráficamente un patrón claro en los múltiplos de la estación.
+
 **Primeros correlogramas**
 
 ```{r correlogramas1}
@@ -83,17 +89,33 @@ pacf( serie_original,lag.max =12, main = "Autocorrelación Parcial (PACF)")
 
 ```
 
--   Hay tendencia? -\> SÍ. Es creciente a lo largo de toda la serie.
-
--   Hay estacionalidad? -\> NO se evidencia gráficamente. La FAC decae de manera sostenida y después del rezago N° 6, toma valores estadísticamente iguales a cero (dentro de la banda azul).
-
--   Cómo está la varianza? (heteroscedasticidad). En el gráfico no se evidencia que los datos tomen valores extremos.
+-   Desde el análisis de los correlogramas, se observa que la autocorrelación acumulada (FAC) decae de manera sostenida y después del rezago N° 6, toma valores estadísticamente iguales a cero (dentro de la banda azul), mientras que la autocorrelación parcial (PACF) sólo presenta valores significativamente diferentes de cero en el rezago 1 ($h = 1$).
 
 # Modelo SARIMA
 
-## Transformaciones previas
+## Estacionalidad de la serie
 
-### Serie original - Diferencias ordinarias y estacionales
+Con el fin de hacer que la serie sea estacionaria en el sentido débil, se realizan a continuación una serie de pruebas respecto a las transformaciones y órdenes de diferenciación a aplicar.
+
+Se exploran combinaciones a partir de las opciones:
+
+-   Niveles de la serie:
+
+    -   Serie con valores en la escala original.
+
+    -   Serie con valores en la escala logarítmica.
+
+    -   Serie con valores transformados a la potencia óptima, indicada por el algoritmo Box-Cox.
+
+-   Órdenes de diferenciación:
+
+    -   1 diferencia ordinaria
+
+    -   2 diferencias ordinarias
+
+    -   1 diferencia ordinaria y 1 estacional
+
+### Valores en escala original - Diferencias ordinarias y estacionales
 
 1.  Criterio de Victor Guerrero - mínima desviación estándar
 
@@ -132,7 +154,7 @@ cat(paste("\n\nEl valor de la desviación estándar de la alternativa s20: la se
 
 ```
 
--   De acuerdo con el criterio de mínima desviación estándar (Víctor Guerrero), la mejor alternativa de diferenciación para la serie de usuarios de Spotify en Latinoamérica es aquella en que a la serie se le aplica sólo 1 diferencia ordinaria ( $SD = 3.07$ ).
+-   De acuerdo con el criterio de mínima desviación estándar (Víctor Guerrero), la mejor alternativa de diferenciación para la serie de usuarios de Spotify en Latinoamérica es aquella en que a la serie se le aplica sólo 1 diferencia ordinaria ( $SD = 3.07$ ), seguido por la alternativa de 1 diferencia estacional y 1 diferencia ordinaria ( $SD = 4.09$ ).
 
 2.  Criterio de decaimiento de la FAC
 
@@ -157,7 +179,21 @@ plot(dusuarios2,ylab='Serie_Usuarios_diferenciada',xlab='Trimestre',type='o', ma
 #ACF para visualizar decaimiento de la estructura de autocorrelación
 acf(dusuarios2, lag.max=20, main="ACF: 2 diferencias ordinarias")
 
+cat(print("\n\nSerie con 1 diferencia ordinaria y 1 estacional \n\n"))
+# Serie con 1 diferencia ordinaria
+dusuarios1_1<- diff(dif1usuarios,lag=4,differences=1)
+
+#plot
+plot(dusuarios1_1,ylab='Serie_Usuarios_diferenciada',xlab='Trimestre',type='o', main="1 diferencia ordinaria y 1 diferencia estacional")
+
+#ACF para visualizar decaimiento de la estructura de autocorrelación
+acf(dusuarios1_1, lag.max=20, main="ACF: 1 diferencia ordinaria y 1 diferencia estacional")
+
 ```
+
+-   De acuerdo con el criterio gráfico, únicamente la aplicación de 2 diferencias ordinarias muestra una autocorrelación acumulada significativa, en el rezago 1 ($h = 1$).
+
+-   De esta situación se interpreta que la serie es susceptible de tener subdiferenciación, por lo que la serie no podría tratarse como serie estacionaria si no se aplican 2 diferencias ordinarias.
 
 3.  Pruebas estadísticas de raíz unitaria para diferencias ordinarias (ADF y PP)
 
@@ -188,7 +224,7 @@ pp.test(diff(dif1usuarios,lag=4,differences=1))
 
 **Resultados:**
 
-1\. Pruebas aplicadas a la serie original:
+1\. Pruebas aplicadas a la serie sin diferenciar:
 
 \- ❌ADF: El p-valor (0.79) no rechaza la hipótesis nula, por lo tanto la serie no es estacionaria.
 
@@ -212,7 +248,7 @@ pp.test(diff(dif1usuarios,lag=4,differences=1))
 
 \- ✅Philiips-Perron: El p-valor (\<0.01) rechaza la hipótesis nula, por lo tanto la serie es estacionaria.
 
-### Serie logaritmo - Diferencias ordinarias y estacionales
+### Valores en logaritmos - Diferencias ordinarias y estacionales
 
 ```{r serielog}
 
@@ -249,7 +285,7 @@ cat(paste("\n\nEl valor de la desviación estándar de la alternativa s21: la se
 cat(paste("\n\nEl valor de la desviación estándar de la alternativa s20: la serie con 2 diferencias estacionales y ninguna diferencia ordinaria es de:\n", sl20)) 
 ```
 
--   De acuerdo con el criterio de mínima desviación estándar (Víctor Guerrero), la mejor alternativa de diferenciación para la serie de usuarios de Spotify en Latinoamérica es aquella en que a la serie se le aplica sólo 1 diferencia ordinaria ( $SD = 0.043$ ).
+-   De acuerdo con el criterio de mínima desviación estándar (Víctor Guerrero), la mejor alternativa de diferenciación para la serie de usuarios de Spotify en Latinoamérica es aquella en que a la serie se le aplica sólo 1 diferencia ordinaria ( $SD = 0.043$ ), seguido por la alternativa de 1 diferencia estacional y 1 diferencia ordinaria ( $SD = 0.053$ ).
 
 2.  Criterio de decaimiento de la FAC
 
@@ -272,6 +308,10 @@ plot(dlogusuarios2,ylab='Serie_Usuarios_diferenciada',xlab='Trimestre',type='o',
 #ACF para visualizar decaimiento de la estructura de autocorrelación 
 acf(dlogusuarios2, lag.max=20, main="ACF: 2 diferencias ordinarias") 
 ```
+
+-   De acuerdo con el criterio gráfico, únicamente la aplicación de 2 diferencias ordinarias muestra una autocorrelación acumulada significativa, en los rezagos 1 y 5 (*h = 1, 5* ).
+
+-   De esta situación se interpreta que la serie es susceptible de tener subdiferenciación, por lo que la serie no podría tratarse como serie estacionaria si no se aplican 2 diferencias ordinarias.
 
 3.  Pruebas estadísticas de raíz unitaria para diferencias ordinarias (ADF y PP)
 
@@ -300,7 +340,7 @@ pp.test(diff(dif1logusuarios,lag=4,differences=1))
 
 **Resultados:**
 
-1\. Pruebas aplicadas a la serie transformada con logaritmo natural:
+1\. Pruebas aplicadas a la serie transformada con logaritmo natural sin diferenciación:
 
 \- ❌ADF: El p-valor (0.91) no rechaza la hipótesis nula, por lo tanto la serie no es estacionaria.
 
@@ -324,7 +364,7 @@ pp.test(diff(dif1logusuarios,lag=4,differences=1))
 
 \- ✅Philiips-Perron: El p-valor (\<0.01) rechaza la hipótesis nula, por lo tanto la serie es estacionaria.
 
-### Serie boxcox - Diferencias ordinarias y estacionales
+### Valores a la potencia (algoritmo Box-Cox) - Diferencias ordinarias y estacionales
 
 ```{r serieboxcox}
 library(forecast)
@@ -333,6 +373,8 @@ print(cat("El valor óptimo del lambda es de", lambda_optimo))
 serie_boxcox <- BoxCox(serie_original, lambda = lambda_optimo)
 plot(serie_boxcox)
 ```
+
+-   El valor óptimo de lambda encontrado por el algoritmo Box-Cox fue de 0.33.
 
 1\. Criterio de Victor Guerrero - mínima desviación estándar
 
@@ -363,6 +405,8 @@ cat(paste("\n\nEl valor de la desviación estándar de la alternativa s20: la se
 
 ```
 
+-   De acuerdo con el criterio de mínima desviación estándar (Víctor Guerrero), la mejor alternativa de diferenciación para la serie de usuarios de Spotify en Latinoamérica es aquella en que a la serie se le aplica sólo 1 diferencia ordinaria ( *SD = 0.16* ), seguido por la alternativa de 1 diferencia estacional y 1 diferencia ordinaria ( *SD = 0.22* ).
+
 2\. Criterio de decaimiento de la FAC
 
 ```{r plot2_boxcox}
@@ -385,6 +429,10 @@ plot(dboxcoxusuarios2,ylab='Serie_Usuarios_diferenciada',xlab='Trimestre',type='
 acf(dboxcoxusuarios2, lag.max=20, main="ACF: 2 diferencias ordinarias")
 
 ```
+
+-   De acuerdo con el criterio gráfico, únicamente la aplicación de 2 diferencias ordinarias muestra una autocorrelación acumulada significativa, en los rezagos 1 y 5 (\$h = 1, 5\$).
+
+-   De esta situación se interpreta que la serie es susceptible de tener subdiferenciación, por lo que la serie no podría tratarse como serie estacionaria si no se aplican 2 diferencias ordinarias.
 
 3\. Pruebas estadísticas de raíz unitaria para diferencias ordinarias (ADF y PP)
 
@@ -450,7 +498,7 @@ acf( serie_diferenciada1,lag.max =12, main = "Autocorrelación (ACF)\n1 Diferenc
 pacf( serie_diferenciada1,lag.max =12, main = "Autocorrelación Parcial (PACF)\n1 Diferencia Ordinaria")
 ```
 
--   La alternativa de una diferencia ordinaria aplicada a la serie transformada con logaritmo natural es la que menor desviación estándar genera, sin embargo, en este escenario no habría ningún valor significativo de autocorrelación para ningún orden de rezago, según se observa en los correlogramas (general y parcial).
+-   La alternativa de una diferencia ordinaria aplicada a la serie transformada con logaritmo natural es la que menor desviación estándar genera, sin embargo, en este escenario no habría ningún valor significativo de autocorrelación para ningún orden de rezago, según se observa en los correlogramas (acumulado y parcial).
 
 ```{r correlogramas2}
 
@@ -465,21 +513,37 @@ pacf( serie_diferenciada2,lag.max =12, main = "Autocorrelación Parcial (PACF)\n
 
 -   Por esta razón, se trabajará con dos diferencias ordinarias en los modelos propuestos ($d = 2$ ).
 
-### **Modelos propuestos**
+### Modelos propuestos
 
 A partir de los gráficos de ACF y PACF, se proponen los siguientes modelos a partir de la serie transformada con el logaritmo natural:
 
 -   Modelo 1: $SARIMA(0,2,1)(0,0,0)_4$
 
+    $$
+    (1-B)^2 X_t = (1 + \theta_1 B) a_t;~X_t = ln(Y_t)
+    $$
+
 -   Modelo 2: $SARIMA(1,2,1)(0,0,0)_4$
 
+    $$
+    (1 - \phi_1 B) (1 - B)^2 X_t = (1 + \theta_1 B) a_t;~X_t = ln(Y_t)
+    $$
+
 -   Modelo 3: $SARIMA(0,2,1)(0,1,1)_4$
+
+    $$
+    (1 - B)^2 (1 - B^4) X_t = (1 + \theta_1 B) (1 + \Theta_1 B^4) a_t;~X_t = ln(Y_t)
+    $$
 
 -   Modelo autoarima
 
 ## Estimación de parámetros
 
 Modelo 1:
+
+$$
+(1-B)^2 X_t = (1 - 0.8695 B) a_t
+$$
 
 -   ✅:El intervalo de confianza para el coeficiente MA1 no incluye el valor cero, por lo que se concluye que el coeficiente `ma1=-0.8695` es estadísticamente significativo
 
@@ -495,6 +559,10 @@ confint(modelo1)
 ```
 
 Modelo 2:
+
+$$
+(1 + 0.3019 B) (1 - B)^2 X_t = (1 -0.8048 B) a_t
+$$
 
 -   ❌El intervalo de confianza para el coeficiente AR1 sí incluye el valor cero, por lo que se concluye que el coeficiente `ar1=-0.3019` no es estadísticamente significativo.
 
@@ -512,11 +580,12 @@ confint(modelo2)
 
 Modelo 3:
 
--   ✅El intervalo de confianza para el coeficiente MA1 no incluye el valor cero, por lo que se concluye que el coeficiente \`ma1=-0.986\` es estadísticamente significativo.
+$$
+(1 - B)^2 (1 - B^4) X_t = (1 - 0.986 B) (1 - 0.8832 B^4) a_t
+$$
 
-<!-- -->
-
--   ✅El intervalo de confianza para el coeficiente SMA1 no incluye el valor cero, por lo que se concluye que el coeficiente \`sma1=-0.8832\` es estadísticamente significativo.
+-   ✅El intervalo de confianza para el coeficiente MA1 no incluye el valor cero, por lo que se concluye que el coeficiente `ma1=-0.986` es estadísticamente significativo.
+-   ✅El intervalo de confianza para el coeficiente SMA1 no incluye el valor cero, por lo que se concluye que el coeficiente `sma1=-0.8832` es estadísticamente significativo.
 
 ```{r modelo3}
 modelo3=arima(serie_log,order=c(0,2,1),
@@ -530,9 +599,20 @@ confint(modelo3)
 
 Modelo Autoarima:
 
--   ✅El intervalo de confianza para el coeficiente MA1 no incluye el valor cero, por lo que se concluye que el coeficiente \`ma1=-0.9008\` es estadísticamente significativo.
+$$
+(1-B)^2 X_t = (1 + \theta_1 B)(1 + \Theta_1 B^4) a_t
+$$
 
--   ❌El intervalo de confianza para el coeficiente SMA1 sí incluye el valor cero, por lo que se concluye que el coeficiente \`sma1=0.3336\` no es estadísticamente significativo.
+$$
+(1-B)^2 X_t = (1 - 0.9008 B)(1 + 0.3336 B^4) a_t
+$$
+
+-   ✅El intervalo de confianza para el coeficiente MA1 no incluye el valor cero, por lo que se concluye que el coeficiente `ma1=-0.9008` es estadísticamente significativo.
+
+```{=html}
+<!-- -->
+```
+-   ❌El intervalo de confianza para el coeficiente SMA1 sí incluye el valor cero, por lo que se concluye que el coeficiente `sma1=0.3336` no es estadísticamente significativo.
 
 ```{r autoarima}
 
@@ -547,12 +627,17 @@ confint(modelo_autoarima)
 
 A continuación se muestra un cuadro resumen con los valores de los criterios de información de cada modelo:
 
-| Modelo                                    | Log-Likelihood | AIC    | BIC       |
-|--------------------|------------------|------------------|------------------|
-| Modelo 1: $SARIMA(0,2,1)(0,0,0)_4$        | 48.71801       | -95.44 | -90.70143 |
-| Modelo 2: $SARIMA(1,2,1)(0,0,0)_4$        | 49.89493       | -95.79 | -89.68798 |
-| Modelo 3: $SARIMA(0,2,1)(0,1,1)_4$        | 35.12435       | -66.25 | -60.59207 |
-| Modelo Autoarima: $ARIMA(0,2,1)(0,0,1)_4$ | 50.16655       | -94.33 | -90.23    |
++-------------------------------------------+----------------+----------------+----------------+
+| Modelo                                    | Log-Likelihood | AIC            | BIC            |
++===========================================+================+================+================+
+| Modelo 1: $SARIMA(0,2,1)(0,0,0)_4$        | 48.71801       | -95.44         | -90.70143      |
++-------------------------------------------+----------------+----------------+----------------+
+| Modelo 2: $SARIMA(1,2,1)(0,0,0)_4$        | 49.89493       | -95.79         | -89.68798      |
++-------------------------------------------+----------------+----------------+----------------+
+| Modelo 3: $SARIMA(0,2,1)(0,1,1)_4$        | 35.12435       | -66.25         | -60.59207      |
++-------------------------------------------+----------------+----------------+----------------+
+| Modelo Autoarima: $ARIMA(0,2,1)(0,0,1)_4$ | 50.16655       | -94.33         | -90.23         |
++-------------------------------------------+----------------+----------------+----------------+
 
 : *Resumen criterios de información*
 
@@ -601,6 +686,8 @@ for (i in seq_along(modelosentrenados)) {
 
 ```
 
+-   De acuerdo con el criterio gráfico, los residuales de todos los cuatro modelos estimados oscilan alrededor del cero. Esto significa que los residuales no muestran patrones que el modelo dejó de calcular.
+
 ```{r}
 #Para ver si tienen media cero creamos un intervalo de confianza bajo la hipotesis nula
 #haga una prueba t para la media
@@ -613,11 +700,9 @@ for (i in seq_along(modelosentrenados)) {
 }
 ```
 
--   Los p-valores de la prueba t-student para los cuatro modelos son mayores que 0.05, por lo que no es posible rechazar la hipótesis nula (media = 0).
+-   Los p-valores de la prueba t-student para los cuatro modelos son mayores que 0.05, por lo que no es posible rechazar la hipótesis nula (media = 0). Adicionalmente, los intervalos de confianza para los cuatro modelos incluyen el valor 0.
 
--   Adicionalmente, los intervalos de confianza para los cuatro modelos incluyen el valor 0.
-
--   Por lo tanto, se puede concluir que todos los modelos cumplen con el supuesto de tener una media igual a cero.
+-   Por lo tanto, se puede concluir que todos los cuatro modelos estimados cumplen con el supuesto de tener una media igual a cero.
 
 ### Varianza Constante
 
@@ -656,7 +741,7 @@ for (i in seq_along(modelosentrenados)) {
 
 -   Según las gráficas, no se evidencia que ninguno de los modelos tengan variaciones explosivas en los valores estandarizados de los residuales.
 
--   En los cuatro modelos, los valores estandarizados de los residuales se encuentran en una franja de +/- 1 desviación estándar.
+-   En los cuatro modelos estimados, los valores estandarizados de los residuales se encuentran en una franja de +/- 1 desviación estándar. Esto evidencia que poseen una varianza estable a través del período de tiempo.
 
 ### No autocorrelación temporal
 
@@ -689,7 +774,7 @@ for (i in seq_along(modelosentrenados)) {
 
 -   De acuerdo con el gráfico ACF, persiste una autocorrelación temporal de los residuales en los rezagos 1 y 5. Esto sugiere que el modelo aún no captura la totalidad de la información que pueden aportar los valores pasados de la variable objetivo. En este modelo se aprecia que persiste una autocorrelación parcial de los residuales al rezago N° 1.
 
-✅Modelo 2:
+🤏Modelo 2:
 
 -   De acuerdo con el gráfico ACF, persiste una autocorrelación temporal de los residuales en el rezago 5 (sale por un margen mínimo de la banda de significancia). Esto sugiere que el modelo aún no captura la totalidad de la información que pueden aportar los valores pasados de la variable objetivo. En este modelo se aprecia que no persiste una autocorrelación parcial de los residuales a ningún rezago.
 
@@ -782,7 +867,7 @@ for (i in seq_along(modelosentrenados)) {
 **Resultados gráficos de cuartiles (QQ-plots):**
 
 -   Los modelos N° 1 y 2 son los que muestran mejor ajuste a la línea de cuartiles teóricos.
--   En los modelo N° 3 y 4, se observa un desajuste respecto a la línea de cuartiles teóricos, sólo en los extremos de la gráfico. Este es un comportamiento común <!--# CONFIRMAR -->en las aplicaciones de modelos SARIMA.
+-   En los modelo N° 3 y 4, se observa un desajuste respecto a la línea de cuartiles teóricos, sólo en los extremos de la gráfico. Esto quiere decir que el modelo no captura de manera perfecta los valores extremos repentinos del N° de usuarios de spotify en la región. Este es un comportamiento común en las aplicaciones de modelos SARIMA.
 
 ```{r}
 for (i in seq_along(modelosentrenados)) {
@@ -810,6 +895,7 @@ cat("\n========================================================\n")
 **Resultados prueba Shapiro-Wilk:**
 
 -   Sólamente en el modelo N° 2, se tiene que el p-valor de la prueba Shapiro-Wilk es mayor a 0.05 y no permite rechazar la hipótesis nula de que los residuales estándar tienen una distribución normal ( $H_0:\text{la población está distribuida normalmente}$ )
+-   Estos resultados son contradictorios con las pruebas realizadas hasta el momento y pueden estar influenciados por el cambio brusco de los valores que se dió entre el trimestre 2020-III y 2020-IV.
 
 ```{r}
 for (i in seq_along(modelosentrenados)) {
@@ -831,15 +917,23 @@ for (i in seq_along(modelosentrenados)) {
 
 ## Modelos SARIMA seleccionados
 
-`{{MODELO 2 Y 3}}`
+-   Teniendo en cuenta que los modelos N° 1 y 4 cumplieron con la mayoría de los supuestos sobre los residuales, a excepción de la no autocorrelación temporal de los residuos (evidenciado en los correlogramas de los residuales), se escogen los modelos N° 2 y 3.
 
--   Tomando como criterio diferenciador los resultados de los correlogramas de los residuos de los modelos, se escogen los modelo N° 2 y 3.
-
--   Por otra parte, los modelos N° 1 y 4 cumplieron con la mayoría de los supuestos sobre los residuos, a excepción de la no autocorrelación temporal de los residuos.
+-   A estos modelos se les aplicarán pruebas de calidad de los pronósticos dentro de la muestra (2016-I a 2023-III) y fuera de la muestra (2023-IV a 2025-III).
 
 ## Pruebas sobre pronósticos
 
+Anotaciones sobre el reescalado de la variable objetivo de la escala logarítmica diferenciada dos veces, a la escala original (Millones de usuarios):
+
+-   En esta sección se hará uso de las funciones fitted(modelo) y predict(modelo), las cuales devuelven los valores ya "re-integrados". Es decir, ya están en niveles de serie_log, no en las dos diferencias con que se estimaron los modelos.
+
+-   Debido a que la función exponencial es convexa, la transformación inversa simple tiende a subestimar el valor real. Para corregirlo, se suma la mitad de la varianza del error $\sigma^2/2$ antes de aplicar la exponencial (corrección de Jensen).
+
+    -   De acuerdo con Hyndman & Athanasopoulos (*Forecasting: Principles and Practice*), si $ln(Y) \sim N(\mu, \sigma^2)$, entonces la media de la serie original es $E[Y] = exp(\mu + \sigma^2/2)$.
+
 ### Pruebas al modelo 2
+
+#### Período dentro de la muestra
 
 ```{r predicciones_modelo2}
 
@@ -848,10 +942,6 @@ m2.predicted_log
 
 ```
 
-preds en escala original -\> Las funciones fitted(modelo) o predict(modelo) en R ya devuelven los valores "re-integrados". Es decir, el resultado de fitted(modelo2) ya está en niveles de serie_log, no en diferencias.
-
-Debido a que la función exponencial es convexa, la simple transformación inversa tiende a subestimar el valor real. Para corregirlo, se suma la mitad de la varianza del error (\$\\sigma\^2/2\$) antes de aplicar la exponencial.
-
 ```{r}
 # 2. Extraer la varianza del error (sigma^2) del modelo
 # En tu imagen f8ec9a es 0.001776
@@ -859,13 +949,31 @@ s2 <- modelo2$sigma2
 
 # 3. Aplicar transformación inversa con corrección de Jensen
 # Fórmula: exp(log_pred + sigma^2 / 2)
-m2.predicted_insample.2 <- round(exp(m2.predicted_log + (s2 / 2)), 0)
+m2.predicted_insample.2 <- round(exp(m2.predicted_log + (s2 / 2)), 2)
 ```
 
 ```{r}
+# 1. Crear el índice y forzarlo a texto plano (UTF-8)
+# Usamos paste0 para construir el texto manualmente y evitar caracteres extraños
+tiempos <- time(serie_original)
+anios <- floor(tiempos)
+trimestres <- cycle(tiempos)
+indice_limpio <- paste0(anios, "-T", trimestres)
+
+# 2. Construir el data frame asegurando que sean vectores numéricos simples
+df_comparativo <- data.frame(
+  Trimestre = as.character(indice_limpio),
+  Real = round(as.numeric(serie_original), 2),
+  Prediccion = round(as.numeric(m2.predicted_insample.2), 2),
+  Diferencia = round(as.numeric(serie_original), 2) - round(as.numeric(m2.predicted_insample.2), 2),
+  stringsAsFactors = FALSE
+)
+
+# 3. Generar la flextable
 library(flextable)
-# Dataframe con valores pronosticados intra-muestra
-flextable(data.frame(serie_original, m2.predicted_insample.2))
+ft <- flextable(df_comparativo)
+ft <- autofit(ft)
+ft
 ```
 
 ```{r}
@@ -905,10 +1013,16 @@ MAE
 
 ```
 
+-   De acuerdo con lo observado en el gráfico, el modelo N°2 sobreestima los valores de la serie de entrenamiento especialmente en el año 2021, con diferencias de hasta 6 millones de usuarios por encima del valor observado en 2021-I.
+
+-   Esto se traduce en un MAPE del 2.92% y un MAE de 2.07 millones de usuarios.
+
+#### Período fuera de la muestra
+
 ```{r}
 
 # 1. Pronósticos en escala logarítmica
-prod.pr = predict(modelo2, n.ahead=10)
+prod.pr = predict(modelo2, n.ahead=8)
 s2 <- modelo2$sigma2 #Corrección de Jensen
 
 # 2. Pronósticos y bandas de confianza en escala original
@@ -935,7 +1049,36 @@ legend("topleft",
 
 ```
 
+```{r MAPE_fuera_m2}
+
+# Calcular el MAPE para el conjunto de prueba
+
+cat("\n\nMean Absolute Percentage Error Loss-MAPE(%):\n")
+m2.MAPE_prueba <- MLmetrics::MAPE(pred_original, conjunto_prueba)*100
+m2.MAPE_prueba
+
+## Error cuadrático medio (unidades originales)
+cat("\n\nError cuadratico medio (RMSE):\n")
+m2.RMSE_prueba <- MLmetrics::RMSE(pred_original, conjunto_prueba)
+m2.RMSE_prueba
+
+## Error absoluto medio:
+cat("\n\nError Absoluto Medio (MAE):\n")
+m2.MAE_prueba <- MLmetrics::MAE(pred_original, conjunto_prueba)
+m2.MAE_prueba
+
+```
+
+-   En cuanto a los pronósticos fuera de muestra, se observa que la predicción muestra una tendencia estrictamente creciente, mientras que los datos observados decrecen a partir del 2025, probablemente por el aumento generalizado de las tarifas de suscripción [[https://www.elcolombiano.com/tecnologia/spotify-aumento-precio-premium-colombia-2025-NI28575923].](https://www.elcolombiano.com/tecnologia/spotify-aumento-precio-premium-colombia-2025-NI28575923].)
+
+```{=html}
+<!-- -->
+```
+-   Esto se traduce en un MAPE del 7.45% y un MAE de 10.89 millones de usuarios.
+
 ### Pruebas al modelo 3
+
+#### Período dentro de la muestra
 
 ```{r predicciones_modelo3}
 
@@ -950,13 +1093,31 @@ s2 <- modelo3$sigma2
 
 # 3. Aplicar transformación inversa con corrección de Jensen
 # Fórmula: exp(log_pred + sigma^2 / 2)
-m3.predicted_insample.2 <- round(exp(m3.predicted_log + (s2 / 2)), 0)
+m3.predicted_insample.2 <- round(exp(m3.predicted_log + (s2 / 2)), 2)
 ```
 
 ```{r}
+# 1. Crear el índice y forzarlo a texto plano (UTF-8)
+# Usamos paste0 para construir el texto manualmente y evitar caracteres extraños
+tiempos <- time(serie_original)
+anios <- floor(tiempos)
+trimestres <- cycle(tiempos)
+indice_limpio <- paste0(anios, "-T", trimestres)
+
+# 2. Construir el data frame asegurando que sean vectores numéricos simples
+m3.df_comparativo <- data.frame(
+  Trimestre = as.character(indice_limpio),
+  Real = round(as.numeric(serie_original), 2),
+  Prediccion = round(as.numeric(m3.predicted_insample.2), 2),
+  Diferencia = round(as.numeric(serie_original), 2) - round(as.numeric(m3.predicted_insample.2), 2),
+  stringsAsFactors = FALSE
+)
+
+# 3. Generar la flextable
 library(flextable)
-# Dataframe con valores pronosticados intra-muestra
-flextable(data.frame(serie_original, m3.predicted_insample.2))
+ft <- flextable(m3.df_comparativo)
+ft <- autofit(ft)
+ft
 ```
 
 ```{r}
@@ -966,7 +1127,7 @@ ts.plot(m3.predicted_insample.2, serie_original, col=c("green", "black"), type="
 
 # Agregar la leyenda
 legend("topleft", 
-       legend = c("Predicción (Modelo 3)", "Serie Original"), 
+       legend = c("Prediccion (Modelo 3)", "Serie Original"), 
        col = c("green", "black"), 
        lty = 1, 
        pch = 1,       # Añade el círculo (puntos) a la leyenda por el type="o"
@@ -983,7 +1144,7 @@ MAPE <- MLmetrics::MAPE(m3.predicted_insample.2, serie_original)*100
 MAPE
 
 ## Error cuadrático medio (unidades originales)
-cat("\n\nError cuadrático medio (RMSE):\n")
+cat("\n\nError cuadratico medio (RMSE):\n")
 RMSE <- MLmetrics::RMSE(m3.predicted_insample.2, serie_original)
 RMSE
 
@@ -994,9 +1155,15 @@ MAE
 
 ```
 
+-   De acuerdo con lo observado en el gráfico, el modelo N°3 sobreestima los valores de la serie de entrenamiento especialmente en el año 2020, con diferencias de hasta 9 millones de usuarios por encima del valor observado en 2020-IV. Sin embargo, se observa que en varios trimestres, la diferencia es de menos de 1 millón de usuarios.
+
+-   Esto se traduce en un MAPE del 2.47% y un MAE de 1.94 millones de usuarios.
+
+#### Período fuera de la muestra
+
 ```{r}
 # 1. Pronósticos en escala logarítmica
-m3.prod.pr = predict(modelo3, n.ahead=10)
+m3.prod.pr = predict(modelo3, n.ahead=8)
 s2 <- modelo3$sigma2 #Corrección de Jensen
 
 # 2. Pronósticos y bandas de confianza en escala original
@@ -1006,7 +1173,7 @@ m3.L_original    <- exp((m3.prod.pr$pred - 2 * m3.prod.pr$se) + (s2 / 2))
 
 # 3. Gráfico
 ts.plot(usuarios_original_ts, m3.pred_original, col=c("black", "blue"), type="o", ylim=c(1,250), xlim=c(2016,2026),
-main="PRONOSTICOS SERIE DE USUARIOS SPOTIFY LATAM",ylab="N° Usuarios",xlab="Trimestre")
+main="PRONOSTICOS SERIE DE USUARIOS SPOTIFY LATAM",ylab="No. Usuarios",xlab="Trimestre")
  lines(m3.U_original, col="red", lty="dashed")
  lines(m3.L_original, col="red", lty="dashed")
 abline(v=2020,lty="dotted",col="11")
@@ -1015,28 +1182,74 @@ abline(v=2020,lty="dotted",col="11")
 
 abline(v = 2020.50, lty = "dotted", col = "darkgreen")
 legend("topleft", 
-       legend = c("Histórico", "Pronóstico", "IC 95%"), 
+       legend = c("Serie original", "Pronostico Modelo 3", "IC 95%"), 
        col = c("black", "blue", "red"), 
        lty = c(1, 1, 2), 
        lwd = c(1, 2, 1),
        bty = "n")
 ```
 
+```{r MAPE_fuera_m3}
+
+# Calcular el MAPE para el conjunto de prueba
+
+cat("\n\nMean Absolute Percentage Error Loss-MAPE(%):\n")
+m3.MAPE_prueba <- MLmetrics::MAPE(m3.pred_original, conjunto_prueba)*100
+m3.MAPE_prueba
+
+## Error cuadrático medio (unidades originales)
+cat("\n\nError cuadratico medio (RMSE):\n")
+m3.RMSE_prueba <- MLmetrics::RMSE(m3.pred_original, conjunto_prueba)
+m3.RMSE_prueba
+
+## Error absoluto medio:
+cat("\n\nError Absoluto Medio (MAE):\n")
+m3.MAE_prueba <- MLmetrics::MAE(m3.pred_original, conjunto_prueba)
+m3.MAE_prueba
+```
+
+-   En cuanto a los pronósticos fuera de muestra, se observa que la predicción se acerca más a la tendencia decreciente de los datos observados decrecen a partir del 2025, probablemente por el aumento generalizado de las tarifas de suscripción [[https://www.elcolombiano.com/tecnologia/spotify-aumento-precio-premium-colombia-2025-NI28575923].](https://www.elcolombiano.com/tecnologia/spotify-aumento-precio-premium-colombia-2025-NI28575923].)
+
+-   Esto se traduce en un MAPE del 5.46% y un MAE de 7.74 millones de usuarios.
+
 ## Resumen de resultados
 
 Resultados:
 
--   Los pronósticos del modelo N° 3 siguen mejor la tendencia de la ventana de datos que no observó el modelo.
--   <!--# SOBRE LAS MÉTRICAS - MAPE Y DEMÁS -->
+-   La tendencia de los datos del conjunto de prueba fue capturada de mejor manera por los pronósticos del modelo N° 3 (1 diferencia ordinaria ordinaria y 1 diferencia estacional) que por los pronósticos del modelo N°2 (1 diferencia ordinaria ordinaria).
+-   El modelo N° 3 tuvo las mejores métricas del poder de predicción, resumidas a continuación:
 
-Problemas encontrados:
++-----------------------------------------+-----------------------+-----------------------+
+| Métrica                                 | Modelo 2              | Modelo 3              |
+|                                         |                       |                       |
+|                                         | $$                    | $$                    |
+|                                         | SARIMA(1,2,1)(0,0,0)4 | SARIMA(0,2,1)(0,1,1)4 |
+|                                         | $$                    | $$                    |
++=========================================+=======================+=======================+
+| Intramuestra - MAPE(%)                  | 2.93                  | ***2.47***            |
++-----------------------------------------+-----------------------+-----------------------+
+| Intramuestra - RMSE(mill. usuarios)     | 3.09                  | 3.19                  |
++-----------------------------------------+-----------------------+-----------------------+
+| Intramuestra - MAE(mill. usuarios)      | 2.07                  | ***1.94***            |
++-----------------------------------------+-----------------------+-----------------------+
+| Fuera de muestra - MAPE(%)              | 7.45                  | ***5.47***            |
++-----------------------------------------+-----------------------+-----------------------+
+| Fuera de muestra - RMSE(mill. usuarios) | 14.47                 | ***8.22***            |
++-----------------------------------------+-----------------------+-----------------------+
+| Fuera de muestra - MAE(mill. usuarios)  | 10.89                 | ***7.74***            |
++-----------------------------------------+-----------------------+-----------------------+
 
--   $%&$\$%&
+**Problemas encontrados:**
 
-¿por qu´e el modelo final es el adecuado?
+-   Las transformaciones previas que se intentaron con la serie original (logaritmo natural y transformación de Box-Cox) no mostraron mayor diferencia entre sí sobre los valores de la varianza de la serie. Finalmente se optó por trabajar la serie en logaritmo por facilidad en la interpretación.
+-   Si bien el uso de sólo 1 diferencia ordinaria era la que arrojaba una menor desviación estándar, los correlogramas dejaban de mostrar valores significativos de autocorrelación. Por esta razón, se optó en principio por el uso de dos diferencias ordinarias.
+-   Los criterios de información arrojaban la peor calificación para el modelo N° 3 debido a su complejidad, pero este fue el de mayor poder de predicción.
+-   Los modelos N° 2 y 3 tuvieron un desempeño casi idéntico en el conjunto de entrenamiento, por lo que la decisión final se tomó con base en el poder de predicción fuera de la muestra.
 
-# Modelo SARIMAX
+**¿Por qué el modelo final es el adecuado?**
 
--   <!--# VARIABLE DUMMY -> NOTICIAS USA -->
+-   Cumple con todos los supuestos de los residuales.
 
--   <!--# VARIABLE CONTINUA - DESEMPLEO USA -->
+-   Tiene las mejores métricas de pronóstico dentro y fuera de la muestra.
+
+-   Gráficamente se observa que fuera de la muestra sus predicciones se acercan más a los datos observados.
